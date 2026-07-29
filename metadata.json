@@ -1,0 +1,8 @@
+{
+  "name": "Remix TP Generator",
+  "description": "An application to generate, save, and manage Learning Objectives (Tujuan Pembelajaran - TP) based on Learning Outcomes (Capaian Pembelajaran - CP) for teachers at MTsN 4 Jombang.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
