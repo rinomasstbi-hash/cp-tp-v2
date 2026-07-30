@@ -3879,22 +3879,33 @@ const App: React.FC = () => {
     <div className="bg-slate-100 min-h-screen">
       <Header userEmail={user?.email} currentView={view} onViewChange={(v) => setView(v as View | 'admin_dashboard')} onLogin={() => setShowLoginModal(true)} globalSettings={globalSettings} isAdmin={isAdmin} />
       {quotaExceeded && !quotaDismissed && (
-        <div className="bg-amber-600 text-white px-4 py-3 shadow-md print:hidden flex items-center justify-between gap-3 text-sm">
-          <div className="flex items-center gap-3">
-            <AlertIcon className="w-6 h-6 flex-shrink-0 text-amber-100" />
+        <div className="bg-amber-600 text-white px-4 py-3 shadow-md print:hidden flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-sm">
+          <div className="flex items-start sm:items-center gap-3">
+            <AlertIcon className="w-6 h-6 flex-shrink-0 text-amber-100 mt-0.5 sm:mt-0" />
             <div>
               <span className="font-bold block sm:inline">Pemberitahuan Mode Baca (Read-Only)</span>
               <span className="sm:ml-2 text-amber-100">
-                Batas kuota harian layanan (Database Firestore / API Key AI) telah tercapai. Anda tetap dapat **membaca, meninjau, mengunduh, dan mencetak** seluruh data perangkat pembelajaran yang ada. Pembuatan atau penyimpanan data baru ditangguhkan sementara sampai kuota direset oleh sistem.
+                Batas kuota pernah tercapai. Jika Anda telah meng-upgrade ke paket Blaze / mereset kuota, klik tombol reset di sebelah kanan untuk mengaktifkan kembali mode normal.
               </span>
             </div>
           </div>
-          <button
-            onClick={() => setQuotaDismissed(true)}
-            className="bg-amber-800 hover:bg-amber-900 text-white text-xs px-3 py-1.5 rounded-md font-semibold transition flex-shrink-0"
-          >
-            Tutup
-          </button>
+          <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-center">
+            <button
+              onClick={() => {
+                localStorage.removeItem('app_quota_exceeded');
+                setQuotaExceeded(false);
+              }}
+              className="bg-amber-800 hover:bg-amber-900 text-white text-xs px-3 py-1.5 rounded-md font-semibold transition"
+            >
+              Reset Status Kuota
+            </button>
+            <button
+              onClick={() => setQuotaDismissed(true)}
+              className="bg-amber-700/60 hover:bg-amber-800 text-amber-100 text-xs px-2.5 py-1.5 rounded-md transition"
+            >
+              Tutup
+            </button>
+          </div>
         </div>
       )}
       {showLoginModal && (
