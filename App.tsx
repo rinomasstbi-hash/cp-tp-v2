@@ -1852,6 +1852,10 @@ const App: React.FC = () => {
       </table>
     `;
 
+    const atpTeacherName = selectedTP?.creatorName || selectedATP.creatorName || "Guru Mata Pelajaran";
+    const atpTeacherNip = selectedTP?.creatorNip || selectedATP.creatorNip || "";
+    const atpFormattedNip = (atpTeacherNip && atpTeacherNip.trim() !== '' && atpTeacherNip.trim() !== '-') ? `NIP. ${atpTeacherNip}` : 'NIP. -';
+
     const signatureBlock = `
       <div class="signature-table-container">
         <br>
@@ -1872,11 +1876,11 @@ const App: React.FC = () => {
             <tr><td class="signature-td signature-td-left" style="width: 566.9pt; height: 45px;">&nbsp;</td><td class="signature-td signature-td-right" style="width: 170.07pt; height: 45px;">&nbsp;</td></tr>
             <tr>
               <td class="signature-td signature-td-left" style="width: 566.9pt; font-weight: bold; text-decoration: underline;">${globalSettings?.kepalaMadrasah || "Sulthon Sulaiman, M.Pd.I"}</td>
-              <td class="signature-td signature-td-right" style="width: 170.07pt; font-weight: bold; text-decoration: underline;">${selectedATP.creatorName}</td>
+              <td class="signature-td signature-td-right" style="width: 170.07pt; font-weight: bold; text-decoration: underline;">${atpTeacherName}</td>
             </tr>
             <tr>
               <td class="signature-td signature-td-left" style="width: 566.9pt;">NIP. ${globalSettings?.nipKepalaMadrasah || '198106162005011003'}</td>
-              <td class="signature-td signature-td-right" style="width: 170.07pt;">NIP. -</td>
+              <td class="signature-td signature-td-right" style="width: 170.07pt;">${atpFormattedNip}</td>
             </tr>
           </tbody>
         </table>
@@ -2036,6 +2040,10 @@ const App: React.FC = () => {
       </table>
     `;
     
+    const protaTeacherName = selectedTP?.creatorName || currentProta.creatorName || "Guru Mata Pelajaran";
+    const protaTeacherNip = selectedTP?.creatorNip || (currentProta as any).creatorNip || "";
+    const protaFormattedNip = (protaTeacherNip && protaTeacherNip.trim() !== '' && protaTeacherNip.trim() !== '-') ? `NIP. ${protaTeacherNip}` : 'NIP. -';
+
     const signatureBlock = `
       <div class="signature-table-container">
         <br>
@@ -2052,11 +2060,11 @@ const App: React.FC = () => {
             <tr><td class="signature-td" style="height: 45px;">&nbsp;</td><td class="signature-td" style="height: 45px;">&nbsp;</td></tr>
             <tr>
               <td class="signature-td" style="font-weight: bold; text-decoration: underline;">${globalSettings?.kepalaMadrasah || "Sulthon Sulaiman, M.Pd.I"}</td>
-              <td class="signature-td" style="font-weight: bold; text-decoration: underline;">${currentProta.creatorName}</td>
+              <td class="signature-td" style="font-weight: bold; text-decoration: underline;">${protaTeacherName}</td>
             </tr>
             <tr>
               <td class="signature-td">NIP. ${globalSettings?.nipKepalaMadrasah || '198106162005011003'}</td>
-              <td class="signature-td">NIP. -</td>
+              <td class="signature-td">${protaFormattedNip}</td>
             </tr>
           </tbody>
         </table>
@@ -2101,7 +2109,9 @@ const App: React.FC = () => {
     const currentProta = protas[0];
     const grade = selectedTP.grade;
     const subject = selectedTP.subject;
-    const creatorName = currentProta.creatorName || selectedTP.creatorName || user?.displayName || "Guru Mata Pelajaran";
+    const creatorName = selectedTP?.creatorName || currentProta.creatorName || user?.displayName || "Guru Mata Pelajaran";
+    const rpeTeacherNip = selectedTP?.creatorNip || (currentProta as any)?.creatorNip || "";
+    const rpeFormattedNip = (rpeTeacherNip && rpeTeacherNip.trim() !== '' && rpeTeacherNip.trim() !== '-') ? `NIP. ${rpeTeacherNip}` : 'NIP. -';
     const jamWeekly = currentProta.jamPertemuan || 2;
 
     const MONTH_MAX_WEEKS_LOCAL: Record<string, number> = {
@@ -2330,7 +2340,7 @@ const App: React.FC = () => {
                   </tr>
                   <tr>
                     <td class="signature-td">NIP. ${globalSettings?.nipKepalaMadrasah || '198106162005011003'}</td>
-                    <td class="signature-td">NIP. -</td>
+                    <td class="signature-td">${rpeFormattedNip}</td>
                   </tr>
                 </tbody>
               </table>
@@ -2492,6 +2502,10 @@ const App: React.FC = () => {
       </table>
     `;
     
+    const kktpTeacherName = selectedTP?.creatorName || selectedATP.creatorName || "Guru Mata Pelajaran";
+    const kktpTeacherNip = selectedTP?.creatorNip || selectedATP.creatorNip || "";
+    const kktpFormattedNip = (kktpTeacherNip && kktpTeacherNip.trim() !== '' && kktpTeacherNip.trim() !== '-') ? `NIP. ${kktpTeacherNip}` : 'NIP. -';
+
     const signatureBlock = `
       <div class="signature-table-container">
         <br>
@@ -2512,11 +2526,11 @@ const App: React.FC = () => {
             <tr><td class="signature-td signature-td-left" style="width: 566.9pt; height: 45px;">&nbsp;</td><td class="signature-td signature-td-right" style="width: 170.07pt; height: 45px;">&nbsp;</td></tr>
             <tr>
               <td class="signature-td signature-td-left" style="width: 566.9pt; font-weight: bold; text-decoration: underline;">${globalSettings?.kepalaMadrasah || "Sulthon Sulaiman, M.Pd.I"}</td>
-              <td class="signature-td signature-td-right" style="width: 170.07pt; font-weight: bold; text-decoration: underline;">${selectedATP.creatorName}</td>
+              <td class="signature-td signature-td-right" style="width: 170.07pt; font-weight: bold; text-decoration: underline;">${kktpTeacherName}</td>
             </tr>
             <tr>
               <td class="signature-td signature-td-left" style="width: 566.9pt;">NIP. ${globalSettings?.nipKepalaMadrasah || '198106162005011003'}</td>
-              <td class="signature-td signature-td-right" style="width: 170.07pt;">NIP. -</td>
+              <td class="signature-td signature-td-right" style="width: 170.07pt;">${kktpFormattedNip}</td>
             </tr>
           </tbody>
         </table>
@@ -2619,7 +2633,9 @@ const App: React.FC = () => {
       if (!rawDataToExport || !selectedTP || protas.length === 0) return;
       const dataToExport = getEnrichedProsemData(rawDataToExport);
       if (!dataToExport) return;
-      const creatorName = protas[0].creatorName;
+      const creatorName = selectedTP?.creatorName || protas[0].creatorName || user?.displayName || "Guru Mata Pelajaran";
+      const prosemTeacherNip = selectedTP?.creatorNip || (protas[0] as any)?.creatorNip || "";
+      const prosemFormattedNip = (prosemTeacherNip && prosemTeacherNip.trim() !== '' && prosemTeacherNip.trim() !== '-') ? `NIP. ${prosemTeacherNip}` : 'NIP. -';
   
       const styles = `
         <style>
@@ -2751,7 +2767,7 @@ const App: React.FC = () => {
             </tr>
             <tr>
               <td class="signature-td signature-td-left" style="width: 566.9pt;">NIP. ${globalSettings?.nipKepalaMadrasah || '198106162005011003'}</td>
-              <td class="signature-td signature-td-right" style="width: 170.07pt;">NIP. -</td>
+              <td class="signature-td signature-td-right" style="width: 170.07pt;">${prosemFormattedNip}</td>
             </tr>
           </tbody>
         </table>

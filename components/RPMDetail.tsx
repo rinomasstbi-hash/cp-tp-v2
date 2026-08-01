@@ -242,7 +242,7 @@ export const RPMDetail: React.FC<RPMDetailProps> = ({
     rpm?.inputData?.teacherName || tp.creatorName || teacherName || ''
   );
   const [formTeacherNip, setFormTeacherNip] = useState(
-    rpm?.inputData?.teacherNip || teacherNip || ''
+    rpm?.inputData?.teacherNip || tp.creatorNip || teacherNip || ''
   );
   const [formClassName, setFormClassName] = useState(
     rpm?.inputData?.className || tp.grade || 'VII'

@@ -28,6 +28,7 @@ const TPEditor: React.FC<TPEditorProps> = ({ mode, initialData, subject, onSave,
     grade: initialData?.grade || '7',
     creatorEmail: initialData?.creatorEmail || '',
     creatorName: initialData?.creatorName || '',
+    creatorNip: initialData?.creatorNip || '',
     cpSourceVersion: initialData?.cpSourceVersion || '',
     additionalNotes: initialData?.additionalNotes || '',
   });
@@ -300,8 +301,12 @@ const TPEditor: React.FC<TPEditorProps> = ({ mode, initialData, subject, onSave,
 
            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             <div>
-              <label htmlFor="creatorName" className="block text-sm font-medium text-slate-700 mb-1">Nama Guru</label>
-              <input type="text" name="creatorName" id="creatorName" value={formData.creatorName} onChange={handleInputChange} className="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500" placeholder="Masukkan nama lengkap Anda" />
+              <label htmlFor="creatorName" className="block text-sm font-medium text-slate-700 mb-1">Nama Guru Pemilik TP</label>
+              <input type="text" name="creatorName" id="creatorName" value={formData.creatorName} onChange={handleInputChange} className="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500" placeholder="Masukkan nama lengkap Guru Pemilik TP" />
+            </div>
+            <div>
+              <label htmlFor="creatorNip" className="block text-sm font-medium text-slate-700 mb-1">NIP Guru (Opsional)</label>
+              <input type="text" name="creatorNip" id="creatorNip" value={formData.creatorNip} onChange={handleInputChange} className="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500" placeholder="Masukkan NIP Guru / -" />
             </div>
             <div>
               <label htmlFor="creatorEmail" className="block text-sm font-medium text-slate-700 mb-1">Email</label>

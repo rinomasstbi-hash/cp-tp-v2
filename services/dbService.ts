@@ -1144,9 +1144,15 @@ export const saveAdminSettings = async (settings: Partial<AdminSettings>): Promi
       localStorage.setItem('cached_admin_settings', JSON.stringify(newCached));
     } catch (e) {}
 
-    setDoc(docRef, cleanSettings, { merge: true }).catch(err => {
-      handleBackgroundError(err, 'settings');
-    });
+    // Save to Firestore with timeout so UI never hangs indefinitely
+    try {
+      await Promise.race([
+        setDoc(docRef, cleanSettings, { merge: true }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Penyimpanan lokal berhasil, namun koneksi cloud tertunda.')), 3000))
+      ]);
+    } catch (err: any) {
+      console.warn("Background cloud sync for admin settings delayed:", err?.message || err);
+    }
   } catch (error: any) {
     console.error("Error saving admin settings:", error);
   }

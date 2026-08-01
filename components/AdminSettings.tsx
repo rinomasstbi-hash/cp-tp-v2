@@ -202,9 +202,15 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({
         try {
             await saveAdminSettings({ ...settings, apiKeys });
             setMessage({ type: 'success', text: 'Pengaturan berhasil disimpan!' });
-            if (onSave) onSave();
+            if (onSave) {
+                try {
+                    onSave();
+                } catch (err) {
+                    console.error("Error in onSave callback:", err);
+                }
+            }
         } catch (error: any) {
-            setMessage({ type: 'error', text: 'Gagal menyimpan: ' + error.message });
+            setMessage({ type: 'error', text: 'Gagal menyimpan: ' + (error?.message || String(error)) });
         } finally {
             setSaving(false);
         }

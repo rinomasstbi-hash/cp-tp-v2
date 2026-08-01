@@ -19,6 +19,7 @@ export interface TPData {
   grade: string;
   creatorEmail: string;
   creatorName: string; 
+  creatorNip?: string;
   cpSourceVersion: string;
   additionalNotes: string;
   tpGroups: TPGroup[];
@@ -46,6 +47,7 @@ export interface ATPData {
   jamPertemuan?: number;
   content: ATPTableRow[];
   creatorName: string;
+  creatorNip?: string;
   creatorEmail: string;
   createdAt: number;
 }
@@ -69,6 +71,7 @@ export interface PROTAData {
   jamPertemuan: number; // Store the JP used for generation
   content: PROTARow[];
   creatorName: string;
+  creatorNip?: string;
   createdAt: number;
 }
 
