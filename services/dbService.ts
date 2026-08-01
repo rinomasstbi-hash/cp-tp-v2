@@ -47,6 +47,15 @@ export const notifyQuotaExceeded = (type: 'database' | 'ai' | 'both' = 'database
   } catch (e) {}
 };
 
+export const clearQuotaExceeded = () => {
+  try {
+    localStorage.removeItem('app_quota_exceeded');
+    window.dispatchEvent(new CustomEvent('app-quota-status', {
+      detail: { exceeded: false }
+    }));
+  } catch (e) {}
+};
+
 export const isQuotaError = (error: any): boolean => {
   if (!error) return false;
   const msg = typeof error === 'string' ? error : (error.message || String(error));

@@ -10,7 +10,7 @@ import ATPEditor from './components/ATPEditor';
 import LoadingOverlay from './components/LoadingOverlay';
 import { RpeDetail } from './components/RpeDetail';
 import { RPMDetail } from './components/RPMDetail';
-import { PlusIcon, EditIcon, TrashIcon, BackIcon, ClipboardIcon, AlertIcon, CloseIcon, FlowChartIcon, ChevronDownIcon, ChevronUpIcon, SparklesIcon, DownloadIcon, BookOpenIcon, ChecklistIcon, CalendarIcon, ListIcon, SaveIcon } from './components/icons';
+import { PlusIcon, EditIcon, TrashIcon, BackIcon, ClipboardIcon, AlertIcon, CloseIcon, FlowChartIcon, ChevronDownIcon, ChevronUpIcon, SparklesIcon, DownloadIcon, BookOpenIcon, ChecklistIcon, CalendarIcon, ListIcon, SaveIcon, RefreshIcon } from './components/icons';
 
 import Login from './components/Login';
 import AdminDashboard from './components/AdminDashboard';
@@ -359,8 +359,11 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const handleQuotaStatus = (e: any) => {
-      setQuotaExceeded(true);
-      setQuotaDismissed(false);
+      const isExceeded = e?.detail?.exceeded !== false;
+      setQuotaExceeded(isExceeded);
+      if (isExceeded) {
+        setQuotaDismissed(false);
+      }
     };
     window.addEventListener('app-quota-status', handleQuotaStatus);
     return () => {
@@ -2807,6 +2810,33 @@ const App: React.FC = () => {
         return <AdminDashboard onBack={() => setView('select_subject')} showConfirm={showConfirm} refreshSettings={refreshSettings} />;
 
       case 'select_subject':
+        if (quotaExceeded && !quotaDismissed) {
+          return (
+            <div className="max-w-4xl mx-auto px-4 py-20 text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="bg-white p-10 rounded-2xl shadow-xl border border-amber-100">
+                <div className="w-20 h-20 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <AlertIcon className="w-10 h-10 text-amber-500" />
+                </div>
+                <h2 className="text-3xl font-bold text-slate-800 mb-4">Mohon Maaf, Guru-Guru Hebat</h2>
+                <p className="text-xl text-slate-600 leading-relaxed mb-6">
+                  Saat ini batas penggunaan sistem (kuota) telah tercapai. 
+                  Mohon bersabar sejenak menunggu token di-reset secara otomatis oleh sistem.
+                </p>
+                <div className="bg-slate-50 p-6 rounded-xl border border-slate-100 text-slate-500 italic mb-8">
+                  "Terima kasih atas dedikasi luar biasa Bapak/Ibu Guru dalam mendidik generasi bangsa. 
+                  Kami sedang mengupayakan agar sistem dapat segera digunakan kembali."
+                </div>
+                <button 
+                  onClick={() => window.location.reload()}
+                  className="bg-teal-600 hover:bg-teal-700 text-white font-semibold py-3 px-10 rounded-xl transition-all shadow-lg shadow-teal-100 flex items-center gap-2 mx-auto"
+                >
+                  <RefreshIcon className="w-5 h-5" />
+                  Cek Status Sistem
+                </button>
+              </div>
+            </div>
+          );
+        }
         return <SubjectSelector 
           onSelectSubject={handleSelectSubject} 
           isAdmin={isAdmin} 
@@ -3892,8 +3922,10 @@ const App: React.FC = () => {
           <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-center">
             <button
               onClick={() => {
-                localStorage.removeItem('app_quota_exceeded');
+                apiService.clearQuotaExceeded();
                 setQuotaExceeded(false);
+                setQuotaDismissed(true);
+                setToastMessage('Status kuota berhasil direset. Seluruh fitur telah diaktifkan kembali.');
               }}
               className="bg-amber-800 hover:bg-amber-900 text-white text-xs px-3 py-1.5 rounded-md font-semibold transition"
             >
