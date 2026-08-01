@@ -1,7 +1,12 @@
-import { getFirestore, collection, doc, getDocs, getDoc, setDoc, updateDoc, deleteDoc, query, where, serverTimestamp, writeBatch, Timestamp, enableIndexedDbPersistence, initializeFirestore, getCountFromServer, addDoc } from 'firebase/firestore';
+import { getFirestore, collection, doc, getDocs, getDoc, setDoc, updateDoc, deleteDoc, query, where, serverTimestamp, writeBatch, Timestamp, enableIndexedDbPersistence, initializeFirestore, getCountFromServer, addDoc, setLogLevel } from 'firebase/firestore';
 import { TPData, ATPData, PROTAData, KKTPData, PROSEMData, ApiKeyItem, RPMData } from '../types';
 import { app, activeConfig } from './firebaseApp';
 import { MATA_PELAJARAN, APP_TITLE } from '../components/constants';
+
+// Suppress internal Firestore connection retry / backoff logs when backend quota is exhausted
+try {
+  setLogLevel('silent');
+} catch (e) {}
 
 enum OperationType {
   CREATE = 'create',
@@ -92,6 +97,14 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
   }
   console.error('Firestore Error: ', JSON.stringify(errInfo));
 }
+
+const handleBackgroundError = (err: any, colName: string) => {
+  if (isQuotaError(err)) {
+    handleFirestoreError(err, OperationType.WRITE, colName);
+  } else {
+    console.warn(`Background sync for ${colName} delayed:`, err?.message || err);
+  }
+};
 
 // Convert timestamp (number) back and forth is needed sometimes but we are using numbers via serverTimestamp() which becomes FieldValue then number locally?
 // No, serverTimestamp() evaluates to Date locally if we use toDate(), or number? 
@@ -315,6 +328,7 @@ export const updateUserLoginTime = async (email: string, name?: string | null): 
     } catch (error: any) {
         if (isQuotaError(error)) {
             console.warn("Firestore quota limit reached while updating user login time.");
+            notifyQuotaExceeded('database');
         } else {
             console.error("Error updating user login time:", error);
         }
@@ -386,6 +400,9 @@ export const getTPCountsBySubject = async (): Promise<Record<string, number>> =>
 // ============================================================================
 
 export const getTPsBySubject = async (subject: string): Promise<TPData[]> => {
+    if (!subject || subject === 'all') {
+        return getAllTPs();
+    }
     const q = query(collection(db, 'tps'), where('subject', '==', subject));
     try {
         const querySnapshot = await getDocs(q);
@@ -441,7 +458,7 @@ export const saveTP = async (data: Omit<TPData, 'id' | 'createdAt' | 'updatedAt'
     try {
         const newDocRef = doc(collection(db, 'tps'));
         // Optimistic update: Fire and forget
-        setDoc(newDocRef, payload).catch(err => console.warn("Background sync delayed:", err));
+        setDoc(newDocRef, payload).catch(err => handleBackgroundError(err, 'tps'));
         
         return {
             ...payload,
@@ -481,7 +498,7 @@ export const updateTP = async (id: string, data: Partial<TPData>): Promise<TPDat
         payload = JSON.parse(JSON.stringify(payload));
         
         // Optimistic update
-        updateDoc(docRef, payload).catch(err => console.warn("Background sync delayed:", err));
+        updateDoc(docRef, payload).catch(err => handleBackgroundError(err, 'tps'));
         
         return {
             ...data, // returns the new values
@@ -496,7 +513,7 @@ export const updateTP = async (id: string, data: Partial<TPData>): Promise<TPDat
 
 export const deleteTP = async (id: string): Promise<{ success: boolean }> => {
     try {
-        deleteDoc(doc(db, 'tps', id)).catch(e => console.warn("Background sync delayed:", e));
+        deleteDoc(doc(db, 'tps', id)).catch(e => handleBackgroundError(e, 'tps'));
         return { success: true };
     } catch (error) {
         handleFirestoreError(error, OperationType.DELETE, `tps/${id}`);
@@ -516,7 +533,7 @@ export const deleteATPsByTPId = async (tpId: string): Promise<{ success: boolean
         snapshot.docs.forEach((doc) => {
             batch.delete(doc.ref);
         });
-        batch.commit().catch(e => console.warn("Background sync delayed:", e));
+        batch.commit().catch(e => handleBackgroundError(e, 'atps'));
         return { success: true };
     } catch (error) {
          handleFirestoreError(error, OperationType.DELETE, `atps`);
@@ -528,6 +545,42 @@ export const getATPsByTPId = async (tpId: string): Promise<ATPData[]> => {
     const q = query(collection(db, 'atps'), where('tpId', '==', tpId));
     try {
         const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => {
+            const data = doc.data();
+            return cleanStringsInObject({
+                ...data,
+                id: doc.id,
+                createdAt: dateToNumber(data.createdAt)
+            }) as ATPData;
+        });
+    } catch (error) {
+        handleFirestoreError(error, OperationType.LIST, 'atps');
+        return [];
+    }
+};
+
+export const getATPsBySubject = async (subject: string): Promise<ATPData[]> => {
+    if (!subject || subject === 'all') return getAllATPs();
+    const q = query(collection(db, 'atps'), where('subject', '==', subject));
+    try {
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => {
+            const data = doc.data();
+            return cleanStringsInObject({
+                ...data,
+                id: doc.id,
+                createdAt: dateToNumber(data.createdAt)
+            }) as ATPData;
+        });
+    } catch (error) {
+        handleFirestoreError(error, OperationType.LIST, 'atps');
+        return [];
+    }
+};
+
+export const getAllATPs = async (): Promise<ATPData[]> => {
+    try {
+        const querySnapshot = await getDocs(collection(db, 'atps'));
         return querySnapshot.docs.map(doc => {
             const data = doc.data();
             return cleanStringsInObject({
@@ -645,6 +698,42 @@ export const getPROTAsByTPId = async (tpId: string): Promise<PROTAData[]> => {
     }
 };
 
+export const getPROTAsBySubject = async (subject: string): Promise<PROTAData[]> => {
+    if (!subject || subject === 'all') return getAllPROTAs();
+    const q = query(collection(db, 'protas'), where('subject', '==', subject));
+    try {
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => {
+            const data = doc.data();
+            return cleanStringsInObject({
+                ...data,
+                id: doc.id,
+                createdAt: dateToNumber(data.createdAt)
+            }) as PROTAData;
+        });
+    } catch (error) {
+        handleFirestoreError(error, OperationType.LIST, 'protas');
+        return [];
+    }
+};
+
+export const getAllPROTAs = async (): Promise<PROTAData[]> => {
+    try {
+        const querySnapshot = await getDocs(collection(db, 'protas'));
+        return querySnapshot.docs.map(doc => {
+            const data = doc.data();
+            return cleanStringsInObject({
+                ...data,
+                id: doc.id,
+                createdAt: dateToNumber(data.createdAt)
+            }) as PROTAData;
+        });
+    } catch (error) {
+        handleFirestoreError(error, OperationType.LIST, 'protas');
+        return [];
+    }
+};
+
 export const savePROTA = async (data: Omit<PROTAData, 'id' | 'createdAt' | 'userId'>): Promise<PROTAData> => {
     if (!auth.currentUser) {
         throw new Error("Penyimpanan gagal: Anda harus login dengan akun Guru terlebih dahulu.");
@@ -716,6 +805,42 @@ export const getKKTPsByATPId = async (atpId: string): Promise<KKTPData[]> => {
     const q = query(collection(db, 'kktps'), where('atpId', '==', atpId));
     try {
         const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => {
+            const data = doc.data();
+            return cleanStringsInObject({
+                ...data,
+                id: doc.id,
+                createdAt: dateToNumber(data.createdAt)
+            }) as KKTPData;
+        });
+    } catch (error) {
+        handleFirestoreError(error, OperationType.LIST, 'kktps');
+        return [];
+    }
+};
+
+export const getKKTPsBySubject = async (subject: string): Promise<KKTPData[]> => {
+    if (!subject || subject === 'all') return getAllKKTPs();
+    const q = query(collection(db, 'kktps'), where('subject', '==', subject));
+    try {
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => {
+            const data = doc.data();
+            return cleanStringsInObject({
+                ...data,
+                id: doc.id,
+                createdAt: dateToNumber(data.createdAt)
+            }) as KKTPData;
+        });
+    } catch (error) {
+        handleFirestoreError(error, OperationType.LIST, 'kktps');
+        return [];
+    }
+};
+
+export const getAllKKTPs = async (): Promise<KKTPData[]> => {
+    try {
+        const querySnapshot = await getDocs(collection(db, 'kktps'));
         return querySnapshot.docs.map(doc => {
             const data = doc.data();
             return cleanStringsInObject({
@@ -808,6 +933,42 @@ export const getPROSEMByProtaId = async (protaId: string): Promise<PROSEMData[]>
     const q = query(collection(db, 'prosems'), where('protaId', '==', protaId));
     try {
         const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => {
+            const data = doc.data();
+            return cleanStringsInObject({
+                ...data,
+                id: doc.id,
+                createdAt: dateToNumber(data.createdAt)
+            }) as PROSEMData;
+        });
+    } catch (error) {
+        handleFirestoreError(error, OperationType.LIST, 'prosems');
+        return [];
+    }
+};
+
+export const getPROSEMsBySubject = async (subject: string): Promise<PROSEMData[]> => {
+    if (!subject || subject === 'all') return getAllPROSEMs();
+    const q = query(collection(db, 'prosems'), where('subject', '==', subject));
+    try {
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => {
+            const data = doc.data();
+            return cleanStringsInObject({
+                ...data,
+                id: doc.id,
+                createdAt: dateToNumber(data.createdAt)
+            }) as PROSEMData;
+        });
+    } catch (error) {
+        handleFirestoreError(error, OperationType.LIST, 'prosems');
+        return [];
+    }
+};
+
+export const getAllPROSEMs = async (): Promise<PROSEMData[]> => {
+    try {
+        const querySnapshot = await getDocs(collection(db, 'prosems'));
         return querySnapshot.docs.map(doc => {
             const data = doc.data();
             return cleanStringsInObject({
@@ -942,10 +1103,17 @@ export const getAdminSettings = async (): Promise<AdminSettings | null> => {
     const snap = await getDoc(docRef);
     if (snap.exists()) {
       const data = snap.data() as AdminSettings;
+      const merged: AdminSettings = {
+        ...defaultAdminSettings,
+        ...data,
+        mataPelajaran: (Array.isArray(data.mataPelajaran) && data.mataPelajaran.length > 0)
+          ? data.mataPelajaran
+          : defaultAdminSettings.mataPelajaran,
+      };
       try {
-        localStorage.setItem('cached_admin_settings', JSON.stringify(data));
+        localStorage.setItem('cached_admin_settings', JSON.stringify(merged));
       } catch (e) {}
-      return data;
+      return merged;
     }
     // Return default settings if document does not exist yet
     return defaultAdminSettings;
@@ -976,14 +1144,11 @@ export const saveAdminSettings = async (settings: Partial<AdminSettings>): Promi
       localStorage.setItem('cached_admin_settings', JSON.stringify(newCached));
     } catch (e) {}
 
-    await setDoc(docRef, cleanSettings, { merge: true });
+    setDoc(docRef, cleanSettings, { merge: true }).catch(err => {
+      handleBackgroundError(err, 'settings');
+    });
   } catch (error: any) {
-    if (isQuotaError(error)) {
-      console.warn("Firestore quota limit reached while saving admin settings, settings saved in local cache.");
-    } else {
-      console.error("Error saving admin settings:", error);
-      throw error;
-    }
+    console.error("Error saving admin settings:", error);
   }
 };
 
@@ -1012,6 +1177,56 @@ export const getRPMsByTPId = async (tpId: string): Promise<RPMData[]> => {
         });
     } catch (error) {
         handleFirestoreError(error, OperationType.GET, `rpms/tpId=${tpId}`);
+        return [];
+    }
+};
+
+export const getRPMsBySubject = async (subject: string): Promise<RPMData[]> => {
+    if (!subject || subject === 'all') return getAllRPMs();
+    const q = query(collection(db, 'rpms'), where('subject', '==', subject));
+    try {
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                userId: data.userId || '',
+                tpId: data.tpId || '',
+                subject: data.subject || '',
+                grade: data.grade || '',
+                semester: data.semester || 'Ganjil',
+                inputData: data.inputData || {},
+                htmlContent: data.htmlContent || '',
+                createdAt: data.createdAt || Date.now(),
+                creatorName: data.creatorName || ''
+            } as RPMData;
+        });
+    } catch (error) {
+        handleFirestoreError(error, OperationType.LIST, 'rpms');
+        return [];
+    }
+};
+
+export const getAllRPMs = async (): Promise<RPMData[]> => {
+    try {
+        const querySnapshot = await getDocs(collection(db, 'rpms'));
+        return querySnapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                userId: data.userId || '',
+                tpId: data.tpId || '',
+                subject: data.subject || '',
+                grade: data.grade || '',
+                semester: data.semester || 'Ganjil',
+                inputData: data.inputData || {},
+                htmlContent: data.htmlContent || '',
+                createdAt: data.createdAt || Date.now(),
+                creatorName: data.creatorName || ''
+            } as RPMData;
+        });
+    } catch (error) {
+        handleFirestoreError(error, OperationType.LIST, 'rpms');
         return [];
     }
 };
@@ -1080,3 +1295,48 @@ export const deleteRPMsByTPId = async (tpId: string): Promise<{ success: boolean
         throw error;
     }
 };
+
+export const clearAllDatabase = async (): Promise<{ success: boolean; deletedCounts: Record<string, number> }> => {
+    const collectionsToClear = ['tps', 'atps', 'protas', 'kktps', 'prosems', 'rpms', 'access_requests'];
+    const deletedCounts: Record<string, number> = {};
+
+    for (const colName of collectionsToClear) {
+        try {
+            const snap = await getDocs(collection(db, colName));
+            deletedCounts[colName] = snap.size;
+            const deletePromises = snap.docs.map(d => deleteDoc(d.ref));
+            await Promise.all(deletePromises);
+        } catch (err) {
+            console.warn(`Error clearing collection ${colName}:`, err);
+        }
+    }
+
+    // Clear approved_users except admin (rinomasstbi@gmail.com)
+    try {
+        const snap = await getDocs(collection(db, 'approved_users'));
+        let count = 0;
+        const deletePromises = snap.docs.map(d => {
+            const data = d.data();
+            const email = data.email || d.id;
+            if (email.toLowerCase().trim() !== 'rinomasstbi@gmail.com') {
+                count++;
+                return deleteDoc(d.ref);
+            }
+            return Promise.resolve();
+        });
+        await Promise.all(deletePromises);
+        deletedCounts['approved_users'] = count;
+    } catch (err) {
+        console.warn("Error clearing approved_users:", err);
+    }
+
+    // Clear local storage caches so UI reflects clean state
+    try {
+        localStorage.removeItem('cached_admin_settings');
+        localStorage.removeItem('mtsn4jombang_selected_subject');
+        localStorage.removeItem('app_quota_exceeded');
+    } catch (e) {}
+
+    return { success: true, deletedCounts };
+};
+

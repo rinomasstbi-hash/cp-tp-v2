@@ -1,14 +1,23 @@
 import React from 'react';
-import ManageAccess from './ManageAccess';
 import { AdminSettings } from './AdminSettings';
 
 interface AdminDashboardProps {
   onBack: () => void;
   showConfirm: (t: string, m: string, cb: () => void) => void;
   refreshSettings: () => void;
+  onOpenImportModal?: () => void;
+  onOpenExportModal?: () => void;
+  onDatabaseCleared?: () => void;
 }
 
-const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack, showConfirm, refreshSettings }) => {
+const AdminDashboard: React.FC<AdminDashboardProps> = ({
+  onBack,
+  showConfirm,
+  refreshSettings,
+  onOpenImportModal,
+  onOpenExportModal,
+  onDatabaseCleared,
+}) => {
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 animate-in fade-in duration-300">
       <button 
@@ -19,20 +28,22 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack, showConfirm, re
         Kembali
       </button>
       
-      <div className="space-y-12">
+      <div className="space-y-6">
         <section className="text-center md:text-left">
-          <div className="border-b border-slate-200 pb-4 mb-6">
+          <div className="border-b border-slate-200 pb-4 mb-2">
             <h1 className="text-3xl font-bold text-slate-800">Admin Dashboard</h1>
-            <p className="text-slate-600 mt-2">Kelola API key dan perizinan akses guru dalam satu halaman.</p>
+            <p className="text-slate-600 mt-1">Kelola konfigurasi umum, mata pelajaran, minggu efektif, pool Gemini API, serta manajemen database JSON.</p>
           </div>
         </section>
 
         <section>
-          <AdminSettings onSave={refreshSettings} />
-        </section>
-
-        <section>
-          <ManageAccess showConfirm={showConfirm} />
+          <AdminSettings 
+            onSave={refreshSettings}
+            showConfirm={showConfirm}
+            onOpenImportModal={onOpenImportModal}
+            onOpenExportModal={onOpenExportModal}
+            onDatabaseCleared={onDatabaseCleared}
+          />
         </section>
       </div>
     </div>
@@ -40,3 +51,4 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack, showConfirm, re
 };
 
 export default AdminDashboard;
+

@@ -12,7 +12,15 @@ interface SubjectDashboardProps {
   canCreate?: boolean;
 }
 
-const SubjectDashboard: React.FC<SubjectDashboardProps> = ({ subjectName, tps, onCreateNew, onSelectTP, onBack, isLoading, canCreate }) => {
+const SubjectDashboard: React.FC<SubjectDashboardProps> = ({
+  subjectName,
+  tps,
+  onCreateNew,
+  onSelectTP,
+  onBack,
+  isLoading,
+  canCreate,
+}) => {
     
   const gradients = [
     'from-violet-500 to-purple-600',

@@ -10,12 +10,14 @@ import ATPEditor from './components/ATPEditor';
 import LoadingOverlay from './components/LoadingOverlay';
 import { RpeDetail } from './components/RpeDetail';
 import { RPMDetail } from './components/RPMDetail';
-import { PlusIcon, EditIcon, TrashIcon, BackIcon, ClipboardIcon, AlertIcon, CloseIcon, FlowChartIcon, ChevronDownIcon, ChevronUpIcon, SparklesIcon, DownloadIcon, BookOpenIcon, ChecklistIcon, CalendarIcon, ListIcon, SaveIcon, RefreshIcon } from './components/icons';
+import { PlusIcon, EditIcon, TrashIcon, BackIcon, ClipboardIcon, AlertIcon, CloseIcon, FlowChartIcon, ChevronDownIcon, ChevronUpIcon, SparklesIcon, DownloadIcon, BookOpenIcon, ChecklistIcon, CalendarIcon, ListIcon, SaveIcon, RefreshIcon, UploadIcon, FileJsonIcon } from './components/icons';
 
 import Login from './components/Login';
 import AdminDashboard from './components/AdminDashboard';
 import { onAuthStateChanged, User, signInWithPopup, GoogleAuthProvider, signOut, auth } from './services/authService';
 import { AdminSettings as GlobalSettings, getAdminSettings } from './services/dbService';
+import { ImportJsonModal } from './components/ImportJsonModal';
+import { exportTPBundleAsJSON, exportFullBackupAsJSON } from './services/importExportService';
 
 const renderMultilineText = (text?: string) => {
     if (!text) return "-";
@@ -34,7 +36,14 @@ const renderMultilineText = (text?: string) => {
     return <span>{cleanSingle}</span>;
 };
 
-const Header: React.FC<{ userEmail?: string | null; currentView: string; onViewChange: (v: string) => void; onLogin: () => void; globalSettings?: GlobalSettings | null; isAdmin?: boolean }> = ({ userEmail, currentView, onViewChange, onLogin, globalSettings, isAdmin }) => {
+const Header: React.FC<{
+  userEmail?: string | null;
+  currentView: string;
+  onViewChange: (v: string) => void;
+  onLogin: () => void;
+  globalSettings?: GlobalSettings | null;
+  isAdmin?: boolean;
+}> = ({ userEmail, currentView, onViewChange, onLogin, globalSettings, isAdmin }) => {
   return (
     <header className="bg-slate-800 shadow-lg w-full sticky top-0 z-40 print:hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -56,8 +65,7 @@ const Header: React.FC<{ userEmail?: string | null; currentView: string; onViewC
               </span>
             </div>
           </div>
-          <div className="flex items-center space-x-2 md:space-x-4">
-            
+          <div className="flex items-center space-x-2 md:space-x-3">
             {userEmail ? (
                 <div className="flex items-center gap-3">
                   {isAdmin && (
@@ -459,6 +467,58 @@ const App: React.FC = () => {
   // State for RPM Management
   const [rpmData, setRpmData] = useState<RPMData | null>(null);
   const [rpmsList, setRpmsList] = useState<RPMData[]>([]);
+
+  // State for Import JSON Modal
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importModalTab, setImportModalTab] = useState<'upload' | 'paste' | 'export'>('upload');
+
+  const handleOpenImportModal = () => {
+    setImportModalTab('upload');
+    setIsImportModalOpen(true);
+  };
+
+  const handleOpenExportModal = () => {
+    setImportModalTab('export');
+    setIsImportModalOpen(true);
+  };
+
+  const handleImportSuccess = async (message: string) => {
+    setTransientMessage(message);
+    if (selectedSubject) {
+      delete tpsCache.current[selectedSubject];
+      loadTPsForSubject(selectedSubject);
+    }
+    apiService.getTPCountsBySubject().then(counts => setTpCounts(counts)).catch(() => {});
+    if (selectedTP && selectedTP.id) {
+      try {
+        const fetchedAtps = await apiService.getATPsByTPId(selectedTP.id);
+        setAtps(fetchedAtps);
+        const fetchedProtas = await apiService.getPROTAsByTPId(selectedTP.id);
+        setProtas(fetchedProtas);
+      } catch (e) {}
+    }
+  };
+
+  const handleExportAllSubjectTPs = async (subjectTps: TPData[]) => {
+    try {
+      const subject = selectedSubject || subjectTps[0]?.subject;
+      if (subject) {
+        const [fetchedAtps, fetchedProtas, fetchedKktps, fetchedProsems, fetchedRpms, fetchedSettings] = await Promise.all([
+          apiService.getATPsBySubject(subject),
+          apiService.getPROTAsBySubject(subject),
+          apiService.getKKTPsBySubject(subject),
+          apiService.getPROSEMsBySubject(subject),
+          apiService.getRPMsBySubject(subject),
+          apiService.getAdminSettings(),
+        ]);
+        exportFullBackupAsJSON(subjectTps, fetchedAtps, fetchedProtas, fetchedKktps, fetchedProsems, fetchedRpms, fetchedSettings);
+      } else {
+        exportFullBackupAsJSON(subjectTps, atps, protas, [], [], [], globalSettings);
+      }
+    } catch (e) {
+      exportFullBackupAsJSON(subjectTps, atps, protas, [], [], [], globalSettings);
+    }
+  };
 
 
   // State for AI generation progress
@@ -2807,7 +2867,25 @@ const App: React.FC = () => {
 
     switch (view) {
       case 'admin_dashboard':
-        return <AdminDashboard onBack={() => setView('select_subject')} showConfirm={showConfirm} refreshSettings={refreshSettings} />;
+        return (
+          <AdminDashboard
+            onBack={() => setView('select_subject')}
+            showConfirm={showConfirm}
+            refreshSettings={refreshSettings}
+            onOpenImportModal={handleOpenImportModal}
+            onOpenExportModal={handleOpenExportModal}
+            onDatabaseCleared={() => {
+              setTps([]);
+              setAtps([]);
+              setProtas([]);
+              setKktpData(null);
+              setProsemData(null);
+              setRpmData(null);
+              tpsCache.current = {};
+              setTransientMessage('Database berhasil dikosongkan! Seluruh data perangkat ajar telah dibersihkan.');
+            }}
+          />
+        );
 
       case 'select_subject':
         if (quotaExceeded) {
@@ -2837,7 +2915,7 @@ const App: React.FC = () => {
                       onClick={() => {
                         apiService.clearQuotaExceeded();
                         setQuotaExceeded(false);
-                        setToastMessage('Status kuota berhasil direset oleh Admin.');
+                        setTransientMessage('Status kuota berhasil direset oleh Admin.');
                       }}
                       className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-3 px-8 rounded-xl transition-all shadow-lg shadow-amber-100 flex items-center gap-2"
                     >
@@ -3897,7 +3975,14 @@ const App: React.FC = () => {
   if (user && !isApproved) {
     return (
       <div className="bg-slate-100 min-h-screen">
-        <Header userEmail={user.email} currentView={view} onViewChange={(v) => setView(v as View | 'admin_dashboard')} onLogin={() => {}} globalSettings={globalSettings} isAdmin={isAdmin} />
+        <Header
+          userEmail={user.email}
+          currentView={view}
+          onViewChange={(v) => setView(v as View | 'admin_dashboard')}
+          onLogin={() => {}}
+          globalSettings={globalSettings}
+          isAdmin={isAdmin}
+        />
         <div className="max-w-7xl mx-auto px-4 py-16 text-center">
           <AlertIcon className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
           <h2 className="text-3xl font-bold text-slate-800 mb-4">Akses Menunggu Verifikasi</h2>
@@ -3913,13 +3998,27 @@ const App: React.FC = () => {
             Cek Status Akses Lagi
           </button>
         </div>
+        <ImportJsonModal
+          isOpen={isImportModalOpen}
+          onClose={() => setIsImportModalOpen(false)}
+          onSuccess={handleImportSuccess}
+          currentSubject={selectedSubject}
+          initialTab={importModalTab}
+        />
       </div>
     );
   }
 
   return (
     <div className="bg-slate-100 min-h-screen">
-      <Header userEmail={user?.email} currentView={view} onViewChange={(v) => setView(v as View | 'admin_dashboard')} onLogin={() => setShowLoginModal(true)} globalSettings={globalSettings} isAdmin={isAdmin} />
+      <Header
+        userEmail={user?.email}
+        currentView={view}
+        onViewChange={(v) => setView(v as View | 'admin_dashboard')}
+        onLogin={() => setShowLoginModal(true)}
+        globalSettings={globalSettings}
+        isAdmin={isAdmin}
+      />
       {showLoginModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
           <div className="relative bg-white rounded-lg shadow-lg max-w-md w-full">
@@ -4052,7 +4151,37 @@ const App: React.FC = () => {
         </div>
       )}
 
+      <ImportJsonModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onSuccess={handleImportSuccess}
+        currentSubject={selectedSubject}
+        initialTab={importModalTab}
+      />
+
       <main>
+        {quotaExceeded && !quotaDismissed && (
+          <div className="max-w-7xl mx-auto px-4 mt-4 print:hidden">
+            <div className="p-4 bg-amber-50 border border-amber-300 rounded-xl shadow-sm text-left relative flex items-start gap-3">
+              <div className="p-2 bg-amber-100 text-amber-800 rounded-lg flex-shrink-0">
+                <AlertIcon className="h-5 w-5 text-amber-600" />
+              </div>
+              <div className="pr-8">
+                <h3 className="text-sm font-bold text-amber-900">Mode Penyimpanan Lokal Aktif (Kuota Harian Cloud Terlampaui)</h3>
+                <p className="mt-1 text-xs text-amber-800 leading-relaxed">
+                  Batas kuota harian Firebase Firestore (unit tulis/baca harian gratis) telah tercapai untuk hari ini. Seluruh fitur pembuatan, pengeditan, penyusunan ATP/Prota/KKTP/Prosem/RPM, cetak, dan ekspor/impor JSON tetap berfungsi penuh dengan penyimpanan lokal browser. Kuota cloud akan otomatis di-reset oleh Firebase besok.
+                </p>
+              </div>
+              <button 
+                onClick={() => setQuotaDismissed(true)} 
+                className="absolute top-3 right-3 p-1.5 text-amber-700 hover:bg-amber-200 rounded-full transition" 
+                title="Tutup pemberitahuan"
+              >
+                <CloseIcon className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
         {globalError && view !== 'view_tp_list' && (
           <div className="max-w-7xl mx-auto px-4 mt-6">
             <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-left relative">

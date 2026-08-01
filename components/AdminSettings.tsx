@@ -1,9 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { getAdminSettings, saveAdminSettings, AdminSettings as SettingsType } from '../services/dbService';
+import { getAdminSettings, saveAdminSettings, clearAllDatabase, AdminSettings as SettingsType } from '../services/dbService';
 import { ApiKeyItem } from '../types';
+import { UploadIcon, DownloadIcon, TrashIcon } from './icons';
 
 interface AdminSettingsProps {
   onSave?: () => void;
+  showConfirm?: (title: string, message: string, onConfirm: () => void) => void;
+  onOpenImportModal?: () => void;
+  onOpenExportModal?: () => void;
+  onDatabaseCleared?: () => void;
 }
 
 const DEFAULT_GANJIL_78 = { 'Juli': [4, 5], 'Agustus': [1, 2, 4, 5], 'September': [1, 2, 3, 4], 'Oktober': [1, 2, 3, 4], 'November': [1, 2, 3, 4, 5], 'Desember': [] };
@@ -93,7 +98,13 @@ const getSelectedWeeks = (weeksObj: any, month: string, defaultArray: number[]):
     return defaultArray;
 };
 
-export const AdminSettings: React.FC<AdminSettingsProps> = ({ onSave }) => {
+export const AdminSettings: React.FC<AdminSettingsProps> = ({
+    onSave,
+    showConfirm,
+    onOpenImportModal,
+    onOpenExportModal,
+    onDatabaseCleared,
+}) => {
     const [settings, setSettings] = useState<SettingsType>({
         geminiApiKey: '',
         tahunPelajaran: '2025/2026',
@@ -117,11 +128,43 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ onSave }) => {
     const [newKeyValue, setNewKeyValue] = useState('');
     const [visibleKeys, setVisibleKeys] = useState<Record<string, boolean>>({});
 
+    const [mainTab, setMainTab] = useState<'umum' | 'mapel' | 'minggu' | 'api' | 'db'>('umum');
     const [weeksTab, setWeeksTab] = useState<'78' | '9'>('78');
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
     const [newSubject, setNewSubject] = useState('');
+    const [isClearing, setIsClearing] = useState(false);
+    const [clearStatusMessage, setClearStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+    const handleClearDatabaseClick = () => {
+        if (!showConfirm) return;
+        showConfirm(
+            '⚠️ KONFIRMASI HAPUS SELURUH DATABASE',
+            'Apakah Anda YAKIN ingin menghapus SELURUH DATABASE (semua TP, ATP, Prota, KKTP, Prosem, RPM, dan perizinan akses guru)? Tindakan ini TIDAK DAPAT DIURUNGKAN. Aplikasi akan menjadi KOSONG dan siap diimpor dari file JSON.',
+            async () => {
+                setIsClearing(true);
+                setClearStatusMessage(null);
+                try {
+                    await clearAllDatabase();
+                    setClearStatusMessage({
+                        type: 'success',
+                        text: 'Database berhasil dikosongkan! Seluruh koleksi telah dibersihkan dan siap untuk diimpor file JSON baru.',
+                    });
+                    if (onDatabaseCleared) {
+                        onDatabaseCleared();
+                    }
+                } catch (err: any) {
+                    setClearStatusMessage({
+                        type: 'error',
+                        text: 'Gagal mengosongkan database: ' + (err.message || String(err)),
+                    });
+                } finally {
+                    setIsClearing(false);
+                }
+            }
+        );
+    };
 
     useEffect(() => {
         const fetchSettings = async () => {
@@ -307,435 +350,632 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ onSave }) => {
 
     return (
         <div className="max-w-7xl mx-auto space-y-6">
-            <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
-                <h2 className="text-xl font-bold text-slate-800 mb-6 border-b pb-2">Konfigurasi Umum</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                    <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-2">Nama Aplikasi</label>
-                        <input 
-                            type="text"
-                            value={settings.namaAplikasi || 'Asisten Guru (AGRU)'}
-                            onChange={(e) => setSettings({...settings, namaAplikasi: e.target.value})}
-                            className="w-full border border-slate-300 rounded-md p-2.5 focus:ring-teal-500 focus:border-teal-500"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-2">Tahun Pelajaran</label>
-                        <input 
-                            type="text"
-                            value={settings.tahunPelajaran}
-                            onChange={(e) => setSettings({...settings, tahunPelajaran: e.target.value})}
-                            className="w-full border border-slate-300 rounded-md p-2.5 focus:ring-teal-500 focus:border-teal-500"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-2">Nama Kepala Madrasah</label>
-                        <input 
-                            type="text"
-                            value={settings.kepalaMadrasah}
-                            onChange={(e) => setSettings({...settings, kepalaMadrasah: e.target.value})}
-                            className="w-full border border-slate-300 rounded-md p-2.5 focus:ring-teal-500 focus:border-teal-500"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-2">NIP Kepala Madrasah</label>
-                        <input 
-                            type="text"
-                            value={settings.nipKepalaMadrasah}
-                            onChange={(e) => setSettings({...settings, nipKepalaMadrasah: e.target.value})}
-                            className="w-full border border-slate-300 rounded-md p-2.5 focus:ring-teal-500 focus:border-teal-500"
-                        />
-                    </div>
-                </div>
-            </div>
-
-            <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
-                <h2 className="text-xl font-bold text-slate-800 mb-6 border-b pb-2">Manajemen Mata Pelajaran</h2>
-                <div className="mb-6 flex flex-col sm:flex-row gap-3 sm:gap-4">
-                    <input 
-                        type="text"
-                        value={newSubject}
-                        onChange={(e) => setNewSubject(e.target.value)}
-                        placeholder="Nama mata pelajaran baru..."
-                        className="w-full sm:flex-1 border border-slate-300 rounded-md p-2.5 focus:ring-teal-500 focus:border-teal-500"
-                        onKeyPress={(e) => e.key === 'Enter' && addSubject()}
-                    />
-                    <button 
-                        onClick={addSubject}
-                        className="bg-teal-600 text-white w-full sm:w-auto px-6 py-2.5 rounded-md font-semibold hover:bg-teal-700 transition"
+            {/* Header & Main Navigation Tabs */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-2 sm:p-3">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <button
+                        type="button"
+                        onClick={() => setMainTab('umum')}
+                        className={`py-3 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 ${
+                            mainTab === 'umum'
+                                ? 'bg-teal-600 text-white shadow-md'
+                                : 'bg-slate-50 text-slate-700 hover:bg-slate-100 hover:text-slate-900 border border-slate-200/60'
+                        }`}
                     >
-                        Tambah Mapel
+                        <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5m0 0h4m-4 0V11m0 0h4m-4 0H9m4 0V7m0 0h4m-4 0H9" />
+                        </svg>
+                        <span>Data Umum</span>
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={() => setMainTab('mapel')}
+                        className={`py-3 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 ${
+                            mainTab === 'mapel'
+                                ? 'bg-teal-600 text-white shadow-md'
+                                : 'bg-slate-50 text-slate-700 hover:bg-slate-100 hover:text-slate-900 border border-slate-200/60'
+                        }`}
+                    >
+                        <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                        </svg>
+                        <span>Manajemen Mapel</span>
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={() => setMainTab('minggu')}
+                        className={`py-3 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 ${
+                            mainTab === 'minggu'
+                                ? 'bg-teal-600 text-white shadow-md'
+                                : 'bg-slate-50 text-slate-700 hover:bg-slate-100 hover:text-slate-900 border border-slate-200/60'
+                        }`}
+                    >
+                        <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        <span>Minggu Efektif</span>
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={() => setMainTab('api')}
+                        className={`py-3 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 ${
+                            mainTab === 'api'
+                                ? 'bg-teal-600 text-white shadow-md'
+                                : 'bg-slate-50 text-slate-700 hover:bg-slate-100 hover:text-slate-900 border border-slate-200/60'
+                        }`}
+                    >
+                        <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                        </svg>
+                        <span>Pool Gemini API</span>
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={() => setMainTab('db')}
+                        className={`py-3 px-4 rounded-lg font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 col-span-2 sm:col-span-1 ${
+                            mainTab === 'db'
+                                ? 'bg-teal-600 text-white shadow-md'
+                                : 'bg-slate-50 text-slate-700 hover:bg-slate-100 hover:text-slate-900 border border-slate-200/60'
+                        }`}
+                    >
+                        <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+                        </svg>
+                        <span>Manajemen Database</span>
                     </button>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                    {settings.mataPelajaran.map(subject => (
-                        <div key={subject} className="flex justify-between items-center bg-slate-50 border border-slate-200 p-3 rounded-md">
-                            <span className="text-sm font-medium text-slate-700 truncate mr-2">{subject}</span>
-                            <button 
-                                onClick={() => removeSubject(subject)}
-                                className="text-red-500 hover:text-red-700 p-1"
-                                title="Hapus Mapel"
-                            >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"></path></svg>
-                            </button>
-                        </div>
-                    ))}
-                </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b pb-4 mb-6 gap-4">
-                    <div>
-                        <h2 className="text-xl font-bold text-slate-800">Manajemen Minggu Efektif</h2>
-                        <p className="text-sm text-slate-500 mt-1">Sesuaikan jumlah minggu efektif per bulan untuk masing-masing tingkatan kelas.</p>
-                    </div>
-                    {/* Grade Selector Tabs */}
-                    <div className="flex bg-slate-100 p-1 rounded-md border border-slate-200">
-                        <button
-                            type="button"
-                            onClick={() => setWeeksTab('78')}
-                            className={`px-4 py-1.5 text-sm font-semibold rounded-md transition ${weeksTab === '78' ? 'bg-teal-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}
-                        >
-                            Kelas 7 & 8
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setWeeksTab('9')}
-                            className={`px-4 py-1.5 text-sm font-semibold rounded-md transition ${weeksTab === '9' ? 'bg-teal-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}
-                        >
-                            Kelas 9
-                        </button>
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    {/* Semester Ganjil Column */}
-                    <div>
-                        <div className="flex justify-between items-center bg-teal-50 border border-teal-100 px-4 py-3 rounded-lg mb-4">
-                            <h3 className="font-bold text-teal-900">Semester Ganjil</h3>
-                            <span className="text-xs font-semibold bg-teal-600 text-white px-2.5 py-1 rounded-full">
-                                Total: {['Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'].reduce((sum, m) => {
-                                    const weeksObj = weeksTab === '78' ? (settings.weeksGanjil78 || {}) : (settings.weeksGanjil9 || {});
-                                    const defaultVal = weeksTab === '78' ? DEFAULT_GANJIL_78[m as keyof typeof DEFAULT_GANJIL_78] : DEFAULT_GANJIL_9[m as keyof typeof DEFAULT_GANJIL_9];
-                                    const arr = getSelectedWeeks(weeksObj, m, defaultVal);
-                                    return sum + arr.length;
-                                }, 0)} Minggu
-                            </span>
-                        </div>
-                        <div className="space-y-3.5">
-                            {['Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'].map(m => {
-                                const weeksObj = weeksTab === '78' ? (settings.weeksGanjil78 || {}) : (settings.weeksGanjil9 || {});
-                                const defaultVal = weeksTab === '78' ? DEFAULT_GANJIL_78[m as keyof typeof DEFAULT_GANJIL_78] : DEFAULT_GANJIL_9[m as keyof typeof DEFAULT_GANJIL_9];
-                                const activeWeeks = getSelectedWeeks(weeksObj, m, defaultVal);
-                                const maxWeeks = MONTH_MAX_WEEKS[m] || 5;
-                                const weekNumbers = Array.from({ length: maxWeeks }, (_, i) => i + 1);
-                                const inactiveWeeks = weekNumbers.filter(w => !activeWeeks.includes(w));
-                                
-                                return (
-                                    <div key={m} className="flex flex-col bg-slate-50 border border-slate-200 p-4 rounded-lg hover:border-slate-300 transition shadow-sm gap-3">
-                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                            <div>
-                                                <span className="font-bold text-slate-800 text-base">{m}</span>
-                                                <span className="text-xs text-slate-500 block">Semester Ganjil ({activeWeeks.length} minggu efektif)</span>
-                                            </div>
-                                            <div className="flex items-center gap-1.5 bg-white p-1.5 rounded-lg border border-slate-200 shadow-sm self-start sm:self-auto">
-                                                {weekNumbers.map(weekNum => {
-                                                    const isSelected = activeWeeks.includes(weekNum);
-                                                    return (
-                                                        <button
-                                                            key={weekNum}
-                                                            type="button"
-                                                            onClick={() => toggleWeekSelection(weeksTab, 'Ganjil', m, weekNum)}
-                                                            className={`w-8 h-8 rounded font-bold text-sm transition-all flex items-center justify-center active:scale-90 select-none ${
-                                                                isSelected 
-                                                                    ? 'bg-teal-600 text-white shadow-sm' 
-                                                                    : 'bg-slate-50 text-slate-400 border border-slate-200 hover:border-slate-300 hover:bg-slate-100'
-                                                            }`}
-                                                            title={`Minggu ke-${weekNum}`}
-                                                        >
-                                                            {weekNum}
-                                                        </button>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                        {inactiveWeeks.length > 0 && (
-                                            <div className="border-t border-slate-200/60 pt-2.5 flex flex-wrap gap-x-4 gap-y-2 text-xs items-center">
-                                                <span className="text-slate-500 font-medium">Kode Tidak Efektif:</span>
-                                                <div className="flex flex-wrap gap-2">
-                                                    {inactiveWeeks.map(w => {
-                                                        const labelKey = weeksTab === '78' ? 'weekLabelsGanjil78' : 'weekLabelsGanjil9';
-                                                        const currentLabels = settings[labelKey] || {};
-                                                        const monthLabels = currentLabels[m] || {};
-                                                        const labelVal = monthLabels[w] || '';
-                                                        return (
-                                                            <div key={w} className="flex items-center gap-1">
-                                                                <span className="text-slate-600 font-semibold bg-slate-200/50 px-1 py-0.5 rounded">M{w}</span>
-                                                                <input 
-                                                                    type="text"
-                                                                    value={labelVal}
-                                                                    onChange={(e) => handleWeekLabelChange(weeksTab, 'Ganjil', m, w, e.target.value)}
-                                                                    placeholder={getDefaultInactiveLabel('Ganjil', m, w) || 'Kode'}
-                                                                    className="w-16 px-1.5 py-0.5 border border-slate-300 rounded text-center font-bold text-xs uppercase text-teal-700 bg-white focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                                                />
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-
-                    {/* Semester Genap Column */}
-                    <div>
-                        <div className="flex justify-between items-center bg-teal-50 border border-teal-100 px-4 py-3 rounded-lg mb-4">
-                            <h3 className="font-bold text-teal-900">Semester Genap</h3>
-                            <span className="text-xs font-semibold bg-teal-600 text-white px-2.5 py-1 rounded-full">
-                                Total: {['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni'].reduce((sum, m) => {
-                                    const weeksObj = weeksTab === '78' ? (settings.weeksGenap78 || {}) : (settings.weeksGenap9 || {});
-                                    const defaultVal = weeksTab === '78' ? DEFAULT_GENAP_78[m as keyof typeof DEFAULT_GENAP_78] : DEFAULT_GENAP_9[m as keyof typeof DEFAULT_GENAP_9];
-                                    const arr = getSelectedWeeks(weeksObj, m, defaultVal);
-                                    return sum + arr.length;
-                                }, 0)} Minggu
-                            </span>
-                        </div>
-                        <div className="space-y-3.5">
-                            {['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni'].map(m => {
-                                const weeksObj = weeksTab === '78' ? (settings.weeksGenap78 || {}) : (settings.weeksGenap9 || {});
-                                const defaultVal = weeksTab === '78' ? DEFAULT_GENAP_78[m as keyof typeof DEFAULT_GENAP_78] : DEFAULT_GENAP_9[m as keyof typeof DEFAULT_GENAP_9];
-                                const activeWeeks = getSelectedWeeks(weeksObj, m, defaultVal);
-                                const maxWeeks = MONTH_MAX_WEEKS[m] || 5;
-                                const weekNumbers = Array.from({ length: maxWeeks }, (_, i) => i + 1);
-                                const inactiveWeeks = weekNumbers.filter(w => !activeWeeks.includes(w));
-                                
-                                return (
-                                    <div key={m} className="flex flex-col bg-slate-50 border border-slate-200 p-4 rounded-lg hover:border-slate-300 transition shadow-sm gap-3">
-                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                            <div>
-                                                <span className="font-bold text-slate-800 text-base">{m}</span>
-                                                <span className="text-xs text-slate-500 block">Semester Genap ({activeWeeks.length} minggu efektif)</span>
-                                            </div>
-                                            <div className="flex items-center gap-1.5 bg-white p-1.5 rounded-lg border border-slate-200 shadow-sm self-start sm:self-auto">
-                                                {weekNumbers.map(weekNum => {
-                                                    const isSelected = activeWeeks.includes(weekNum);
-                                                    return (
-                                                        <button
-                                                            key={weekNum}
-                                                            type="button"
-                                                            onClick={() => toggleWeekSelection(weeksTab, 'Genap', m, weekNum)}
-                                                            className={`w-8 h-8 rounded font-bold text-sm transition-all flex items-center justify-center active:scale-90 select-none ${
-                                                                isSelected 
-                                                                    ? 'bg-teal-600 text-white shadow-sm' 
-                                                                    : 'bg-slate-50 text-slate-400 border border-slate-200 hover:border-slate-300 hover:bg-slate-100'
-                                                            }`}
-                                                            title={`Minggu ke-${weekNum}`}
-                                                        >
-                                                            {weekNum}
-                                                        </button>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                        {inactiveWeeks.length > 0 && (
-                                            <div className="border-t border-slate-200/60 pt-2.5 flex flex-wrap gap-x-4 gap-y-2 text-xs items-center">
-                                                <span className="text-slate-500 font-medium">Kode Tidak Efektif:</span>
-                                                <div className="flex flex-wrap gap-2">
-                                                    {inactiveWeeks.map(w => {
-                                                        const labelKey = weeksTab === '78' ? 'weekLabelsGenap78' : 'weekLabelsGenap9';
-                                                        const currentLabels = settings[labelKey] || {};
-                                                        const monthLabels = currentLabels[m] || {};
-                                                        const labelVal = monthLabels[w] || '';
-                                                        return (
-                                                            <div key={w} className="flex items-center gap-1">
-                                                                <span className="text-slate-600 font-semibold bg-slate-200/50 px-1 py-0.5 rounded">M{w}</span>
-                                                                <input 
-                                                                    type="text"
-                                                                    value={labelVal}
-                                                                    onChange={(e) => handleWeekLabelChange(weeksTab, 'Genap', m, w, e.target.value)}
-                                                                    placeholder={getDefaultInactiveLabel('Genap', m, w) || 'Kode'}
-                                                                    className="w-16 px-1.5 py-0.5 border border-slate-300 rounded text-center font-bold text-xs uppercase text-teal-700 bg-white focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                                                />
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-                </div>
-                
-                {/* Recommendation indicator */}
-                <div className="mt-6 p-4 rounded-lg border bg-amber-50 border-amber-200 text-amber-800 text-sm">
-                    {weeksTab === '78' ? (
-                        <span>💡 <strong>Rekomendasi Kelas 7 & 8:</strong> Standar total minggu efektif berkisar antara <strong>18 - 20 minggu</strong> per semester (total 36 - 40 minggu setahun).</span>
-                    ) : (
-                        <span>💡 <strong>Rekomendasi Kelas 9:</strong> Standar total minggu efektif berkisar antara <strong>16 - 17 minggu</strong> per semester (total 32 - 34 minggu setahun).</span>
-                    )}
-                </div>
-            </div>
-
-            <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6 space-y-6">
-                <div className="border-b pb-4">
-                    <h2 className="text-xl font-bold text-slate-800">Konfigurasi & Pool Gemini API</h2>
-                    <p className="text-sm text-slate-500 mt-1">
-                        Atur API Key utama dan ketersediaan API Key cadangan. Sistem akan memutar penggunaan key secara otomatis jika salah satu key cadangan mendeteksi batas limit harian tercapai.
-                    </p>
-                </div>
-
-                <div className="bg-blue-50 border border-blue-200 text-blue-800 rounded-lg p-4 text-sm flex gap-3">
-                    <span className="text-lg">⚙️</span>
-                    <div>
-                        <strong className="block mb-0.5">Sistem Rotasi API Key Otomatis Aktif</strong>
-                        Saat proses men-generate modul ajar atau perangkat ajar, apabila API Key yang sedang digunakan menyentuh batas limit harian (<code className="bg-blue-100 px-1 rounded text-xs font-mono">Quota Exceeded / 429</code>), sistem akan otomatis memperbarui statusnya menjadi <span className="font-semibold text-amber-700">"Limit Tercapai"</span> di database dan memindahkan pemrosesan ke API Key cadangan berikutnya yang berstatus <span className="font-semibold text-green-700">"Aktif"</span> secara real-time tanpa mengganggu kenyamanan pengguna.
-                    </div>
-                </div>
-
-                {/* Primary API Key */}
-                <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-2">Gemini API Key Utama (Default Fallback)</label>
-                    <input 
-                        type="password"
-                        value={settings.geminiApiKey}
-                        onChange={(e) => setSettings({...settings, geminiApiKey: e.target.value})}
-                        placeholder="AIzaSy..."
-                        className="w-full border border-slate-300 rounded-md p-2.5 focus:ring-teal-500 focus:border-teal-500 font-mono text-sm"
-                    />
-                    <p className="mt-2 text-sm text-slate-500">
-                        API Key default yang digunakan sebagai prioritas terakhir apabila pool API Key cadangan kosong atau seluruhnya tidak aktif.
-                    </p>
-                </div>
-
-                <div className="border-t pt-6 space-y-4">
-                    <h3 className="font-bold text-slate-800 text-lg">Pool API Key Cadangan</h3>
-                    
-                    {/* Add Key Form */}
-                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-3">
-                        <span className="text-sm font-semibold text-slate-700 block">Tambah API Key Baru ke Pool</span>
-                        <div className="flex flex-col md:flex-row gap-3">
+            {/* Tab 1: Data Umum */}
+            {mainTab === 'umum' && (
+                <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+                    <h2 className="text-xl font-bold text-slate-800 mb-6 border-b pb-2">Konfigurasi Data Umum</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                        <div>
+                            <label className="block text-sm font-semibold text-slate-700 mb-2">Nama Aplikasi</label>
                             <input 
                                 type="text"
-                                value={newKeyName}
-                                onChange={(e) => setNewKeyName(e.target.value)}
-                                placeholder="Nama/Label Key (misal: Akun Cadangan B)"
-                                className="flex-1 border border-slate-300 rounded-md p-2 text-sm focus:ring-teal-500 focus:border-teal-500"
+                                value={settings.namaAplikasi || 'Asisten Guru (AGRU)'}
+                                onChange={(e) => setSettings({...settings, namaAplikasi: e.target.value})}
+                                className="w-full border border-slate-300 rounded-md p-2.5 focus:ring-teal-500 focus:border-teal-500"
                             />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-semibold text-slate-700 mb-2">Tahun Pelajaran</label>
                             <input 
                                 type="text"
-                                value={newKeyValue}
-                                onChange={(e) => setNewKeyValue(e.target.value)}
-                                placeholder="API Key (AIzaSy...)"
-                                className="flex-1 border border-slate-300 rounded-md p-2 text-sm focus:ring-teal-500 focus:border-teal-500 font-mono"
+                                value={settings.tahunPelajaran}
+                                onChange={(e) => setSettings({...settings, tahunPelajaran: e.target.value})}
+                                className="w-full border border-slate-300 rounded-md p-2.5 focus:ring-teal-500 focus:border-teal-500"
                             />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-semibold text-slate-700 mb-2">Nama Kepala Madrasah</label>
+                            <input 
+                                type="text"
+                                value={settings.kepalaMadrasah}
+                                onChange={(e) => setSettings({...settings, kepalaMadrasah: e.target.value})}
+                                className="w-full border border-slate-300 rounded-md p-2.5 focus:ring-teal-500 focus:border-teal-500"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-semibold text-slate-700 mb-2">NIP Kepala Madrasah</label>
+                            <input 
+                                type="text"
+                                value={settings.nipKepalaMadrasah}
+                                onChange={(e) => setSettings({...settings, nipKepalaMadrasah: e.target.value})}
+                                className="w-full border border-slate-300 rounded-md p-2.5 focus:ring-teal-500 focus:border-teal-500"
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Tab 2: Manajemen Mapel */}
+            {mainTab === 'mapel' && (
+                <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+                    <h2 className="text-xl font-bold text-slate-800 mb-6 border-b pb-2">Manajemen Mata Pelajaran</h2>
+                    <div className="mb-6 flex flex-col sm:flex-row gap-3 sm:gap-4">
+                        <input 
+                            type="text"
+                            value={newSubject}
+                            onChange={(e) => setNewSubject(e.target.value)}
+                            placeholder="Nama mata pelajaran baru..."
+                            className="w-full sm:flex-1 border border-slate-300 rounded-md p-2.5 focus:ring-teal-500 focus:border-teal-500"
+                            onKeyPress={(e) => e.key === 'Enter' && addSubject()}
+                        />
+                        <button 
+                            onClick={addSubject}
+                            className="bg-teal-600 text-white w-full sm:w-auto px-6 py-2.5 rounded-md font-semibold hover:bg-teal-700 transition"
+                        >
+                            Tambah Mapel
+                        </button>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                        {settings.mataPelajaran.map(subject => (
+                            <div key={subject} className="flex justify-between items-center bg-slate-50 border border-slate-200 p-3 rounded-md">
+                                <span className="text-sm font-medium text-slate-700 truncate mr-2">{subject}</span>
+                                <button 
+                                    onClick={() => removeSubject(subject)}
+                                    className="text-red-500 hover:text-red-700 p-1"
+                                    title="Hapus Mapel"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"></path></svg>
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Tab 3: Minggu Efektif */}
+            {mainTab === 'minggu' && (
+                <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b pb-4 mb-6 gap-4">
+                        <div>
+                            <h2 className="text-xl font-bold text-slate-800">Manajemen Minggu Efektif (RPE)</h2>
+                            <p className="text-sm text-slate-500 mt-1">Sesuaikan jumlah minggu efektif per bulan untuk masing-masing tingkatan kelas.</p>
+                        </div>
+                        {/* Grade Selector Tabs */}
+                        <div className="flex bg-slate-100 p-1 rounded-md border border-slate-200">
                             <button
                                 type="button"
-                                onClick={handleAddApiKey}
-                                disabled={!newKeyValue.trim()}
-                                className="bg-teal-600 hover:bg-teal-700 text-white font-semibold text-sm px-5 py-2 rounded-md transition disabled:opacity-50"
+                                onClick={() => setWeeksTab('78')}
+                                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition ${weeksTab === '78' ? 'bg-teal-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}
                             >
-                                + Tambahkan ke Pool
+                                Kelas 7 & 8
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setWeeksTab('9')}
+                                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition ${weeksTab === '9' ? 'bg-teal-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}
+                            >
+                                Kelas 9
                             </button>
                         </div>
                     </div>
 
-                    {/* Keys Table */}
-                    {apiKeys.length === 0 ? (
-                        <div className="text-center py-8 text-slate-400 text-sm border border-dashed border-slate-200 rounded-lg font-medium">
-                            Belum ada API Key cadangan dalam pool. Silakan tambahkan kunci di atas untuk mengaktifkan fitur rotasi otomatis.
-                        </div>
-                    ) : (
-                        <div className="overflow-x-auto border border-slate-200 rounded-lg shadow-sm">
-                            <table className="w-full text-left border-collapse text-sm">
-                                <thead>
-                                    <tr className="bg-slate-100 border-b border-slate-200 text-slate-700 font-semibold">
-                                        <th className="p-3">Nama / Label</th>
-                                        <th className="p-3">API Key</th>
-                                        <th className="p-3">Status</th>
-                                        <th className="p-3">Terakhir Digunakan</th>
-                                        <th className="p-3">Keterangan / Error</th>
-                                        <th className="p-3 text-center">Aksi</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-200 text-slate-700">
-                                    {apiKeys.map((k) => {
-                                        const isVisible = visibleKeys[k.id];
-                                        return (
-                                            <tr key={k.id} className="hover:bg-slate-50 transition">
-                                                <td className="p-3 font-medium text-slate-800">{k.name}</td>
-                                                <td className="p-3 font-mono text-xs">
-                                                    <div className="flex items-center gap-2">
-                                                        <span>
-                                                            {isVisible 
-                                                                ? k.key 
-                                                                : `${k.key.substring(0, 8)}...${k.key.substring(k.key.length - 4)}`}
-                                                        </span>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => toggleKeyVisibility(k.id)}
-                                                            className="text-slate-400 hover:text-slate-600 transition"
-                                                            title={isVisible ? "Sembunyikan" : "Tampilkan"}
-                                                        >
-                                                            {isVisible ? (
-                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18"></path></svg>
-                                                            ) : (
-                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
-                                                            )}
-                                                        </button>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        {/* Semester Ganjil Column */}
+                        <div>
+                            <div className="flex justify-between items-center bg-teal-50 border border-teal-100 px-4 py-3 rounded-lg mb-4">
+                                <h3 className="font-bold text-teal-900">Semester Ganjil</h3>
+                                <span className="text-xs font-semibold bg-teal-600 text-white px-2.5 py-1 rounded-full">
+                                    Total: {['Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'].reduce((sum, m) => {
+                                        const weeksObj = weeksTab === '78' ? (settings.weeksGanjil78 || {}) : (settings.weeksGanjil9 || {});
+                                        const defaultVal = weeksTab === '78' ? DEFAULT_GANJIL_78[m as keyof typeof DEFAULT_GANJIL_78] : DEFAULT_GANJIL_9[m as keyof typeof DEFAULT_GANJIL_9];
+                                        const arr = getSelectedWeeks(weeksObj, m, defaultVal);
+                                        return sum + arr.length;
+                                    }, 0)} Minggu
+                                </span>
+                            </div>
+                            <div className="space-y-3.5">
+                                {['Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'].map(m => {
+                                    const weeksObj = weeksTab === '78' ? (settings.weeksGanjil78 || {}) : (settings.weeksGanjil9 || {});
+                                    const defaultVal = weeksTab === '78' ? DEFAULT_GANJIL_78[m as keyof typeof DEFAULT_GANJIL_78] : DEFAULT_GANJIL_9[m as keyof typeof DEFAULT_GANJIL_9];
+                                    const activeWeeks = getSelectedWeeks(weeksObj, m, defaultVal);
+                                    const maxWeeks = MONTH_MAX_WEEKS[m] || 5;
+                                    const weekNumbers = Array.from({ length: maxWeeks }, (_, i) => i + 1);
+                                    const inactiveWeeks = weekNumbers.filter(w => !activeWeeks.includes(w));
+                                    
+                                    return (
+                                        <div key={m} className="flex flex-col bg-slate-50 border border-slate-200 p-4 rounded-lg hover:border-slate-300 transition shadow-sm gap-3">
+                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                                <div>
+                                                    <span className="font-bold text-slate-800 text-base">{m}</span>
+                                                    <span className="text-xs text-slate-500 block">Semester Ganjil ({activeWeeks.length} minggu efektif)</span>
+                                                </div>
+                                                <div className="flex items-center gap-1.5 bg-white p-1.5 rounded-lg border border-slate-200 shadow-sm self-start sm:self-auto">
+                                                    {weekNumbers.map(weekNum => {
+                                                        const isSelected = activeWeeks.includes(weekNum);
+                                                        return (
+                                                            <button
+                                                                key={weekNum}
+                                                                type="button"
+                                                                onClick={() => toggleWeekSelection(weeksTab, 'Ganjil', m, weekNum)}
+                                                                className={`w-8 h-8 rounded font-bold text-sm transition-all flex items-center justify-center active:scale-90 select-none ${
+                                                                    isSelected 
+                                                                        ? 'bg-teal-600 text-white shadow-sm' 
+                                                                        : 'bg-slate-50 text-slate-400 border border-slate-200 hover:border-slate-300 hover:bg-slate-100'
+                                                                }`}
+                                                                title={`Minggu ke-${weekNum}`}
+                                                            >
+                                                                {weekNum}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                            {inactiveWeeks.length > 0 && (
+                                                <div className="border-t border-slate-200/60 pt-2.5 flex flex-wrap gap-x-4 gap-y-2 text-xs items-center">
+                                                    <span className="text-slate-500 font-medium">Kode Tidak Efektif:</span>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {inactiveWeeks.map(w => {
+                                                            const labelKey = weeksTab === '78' ? 'weekLabelsGanjil78' : 'weekLabelsGanjil9';
+                                                            const currentLabels = settings[labelKey] || {};
+                                                            const monthLabels = currentLabels[m] || {};
+                                                            const labelVal = monthLabels[w] || '';
+                                                            return (
+                                                                <div key={w} className="flex items-center gap-1">
+                                                                    <span className="text-slate-600 font-semibold bg-slate-200/50 px-1 py-0.5 rounded">M{w}</span>
+                                                                    <input 
+                                                                        type="text"
+                                                                        value={labelVal}
+                                                                        onChange={(e) => handleWeekLabelChange(weeksTab, 'Ganjil', m, w, e.target.value)}
+                                                                        placeholder={getDefaultInactiveLabel('Ganjil', m, w) || 'Kode'}
+                                                                        className="w-16 px-1.5 py-0.5 border border-slate-300 rounded text-center font-bold text-xs uppercase text-teal-700 bg-white focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                                                    />
+                                                                </div>
+                                                            );
+                                                        })}
                                                     </div>
-                                                </td>
-                                                <td className="p-3">
-                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
-                                                        k.status === 'Aktif' 
-                                                            ? 'bg-green-100 text-green-800 border-green-200' 
-                                                            : k.status === 'Limit Tercapai'
-                                                                ? 'bg-amber-100 text-amber-800 border-amber-200'
-                                                                : 'bg-red-100 text-red-800 border-red-200'
-                                                    }`}>
-                                                        {k.status}
-                                                    </span>
-                                                </td>
-                                                <td className="p-3 text-xs text-slate-500 font-medium">{formatLastUsed(k.lastUsed)}</td>
-                                                <td className="p-3 text-xs text-slate-500 max-w-xs truncate" title={k.errorMessage || ''}>
-                                                    {k.errorMessage || '-'}
-                                                </td>
-                                                <td className="p-3 text-center">
-                                                    <div className="flex items-center justify-center gap-2">
-                                                        {k.status !== 'Aktif' && (
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* Semester Genap Column */}
+                        <div>
+                            <div className="flex justify-between items-center bg-teal-50 border border-teal-100 px-4 py-3 rounded-lg mb-4">
+                                <h3 className="font-bold text-teal-900">Semester Genap</h3>
+                                <span className="text-xs font-semibold bg-teal-600 text-white px-2.5 py-1 rounded-full">
+                                    Total: {['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni'].reduce((sum, m) => {
+                                        const weeksObj = weeksTab === '78' ? (settings.weeksGenap78 || {}) : (settings.weeksGenap9 || {});
+                                        const defaultVal = weeksTab === '78' ? DEFAULT_GENAP_78[m as keyof typeof DEFAULT_GENAP_78] : DEFAULT_GENAP_9[m as keyof typeof DEFAULT_GENAP_9];
+                                        const arr = getSelectedWeeks(weeksObj, m, defaultVal);
+                                        return sum + arr.length;
+                                    }, 0)} Minggu
+                                </span>
+                            </div>
+                            <div className="space-y-3.5">
+                                {['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni'].map(m => {
+                                    const weeksObj = weeksTab === '78' ? (settings.weeksGenap78 || {}) : (settings.weeksGenap9 || {});
+                                    const defaultVal = weeksTab === '78' ? DEFAULT_GENAP_78[m as keyof typeof DEFAULT_GENAP_78] : DEFAULT_GENAP_9[m as keyof typeof DEFAULT_GENAP_9];
+                                    const activeWeeks = getSelectedWeeks(weeksObj, m, defaultVal);
+                                    const maxWeeks = MONTH_MAX_WEEKS[m] || 5;
+                                    const weekNumbers = Array.from({ length: maxWeeks }, (_, i) => i + 1);
+                                    const inactiveWeeks = weekNumbers.filter(w => !activeWeeks.includes(w));
+                                    
+                                    return (
+                                        <div key={m} className="flex flex-col bg-slate-50 border border-slate-200 p-4 rounded-lg hover:border-slate-300 transition shadow-sm gap-3">
+                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                                <div>
+                                                    <span className="font-bold text-slate-800 text-base">{m}</span>
+                                                    <span className="text-xs text-slate-500 block">Semester Genap ({activeWeeks.length} minggu efektif)</span>
+                                                </div>
+                                                <div className="flex items-center gap-1.5 bg-white p-1.5 rounded-lg border border-slate-200 shadow-sm self-start sm:self-auto">
+                                                    {weekNumbers.map(weekNum => {
+                                                        const isSelected = activeWeeks.includes(weekNum);
+                                                        return (
+                                                            <button
+                                                                key={weekNum}
+                                                                type="button"
+                                                                onClick={() => toggleWeekSelection(weeksTab, 'Genap', m, weekNum)}
+                                                                className={`w-8 h-8 rounded font-bold text-sm transition-all flex items-center justify-center active:scale-90 select-none ${
+                                                                    isSelected 
+                                                                        ? 'bg-teal-600 text-white shadow-sm' 
+                                                                        : 'bg-slate-50 text-slate-400 border border-slate-200 hover:border-slate-300 hover:bg-slate-100'
+                                                                }`}
+                                                                title={`Minggu ke-${weekNum}`}
+                                                            >
+                                                                {weekNum}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                            {inactiveWeeks.length > 0 && (
+                                                <div className="border-t border-slate-200/60 pt-2.5 flex flex-wrap gap-x-4 gap-y-2 text-xs items-center">
+                                                    <span className="text-slate-500 font-medium">Kode Tidak Efektif:</span>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {inactiveWeeks.map(w => {
+                                                            const labelKey = weeksTab === '78' ? 'weekLabelsGenap78' : 'weekLabelsGenap9';
+                                                            const currentLabels = settings[labelKey] || {};
+                                                            const monthLabels = currentLabels[m] || {};
+                                                            const labelVal = monthLabels[w] || '';
+                                                            return (
+                                                                <div key={w} className="flex items-center gap-1">
+                                                                    <span className="text-slate-600 font-semibold bg-slate-200/50 px-1 py-0.5 rounded">M{w}</span>
+                                                                    <input 
+                                                                        type="text"
+                                                                        value={labelVal}
+                                                                        onChange={(e) => handleWeekLabelChange(weeksTab, 'Genap', m, w, e.target.value)}
+                                                                        placeholder={getDefaultInactiveLabel('Genap', m, w) || 'Kode'}
+                                                                        className="w-16 px-1.5 py-0.5 border border-slate-300 rounded text-center font-bold text-xs uppercase text-teal-700 bg-white focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                                                    />
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {/* Recommendation indicator */}
+                    <div className="mt-6 p-4 rounded-lg border bg-amber-50 border-amber-200 text-amber-800 text-sm">
+                        {weeksTab === '78' ? (
+                            <span>💡 <strong>Rekomendasi Kelas 7 & 8:</strong> Standar total minggu efektif berkisar antara <strong>18 - 20 minggu</strong> per semester (total 36 - 40 minggu setahun).</span>
+                        ) : (
+                            <span>💡 <strong>Rekomendasi Kelas 9:</strong> Standar total minggu efektif berkisar antara <strong>16 - 17 minggu</strong> per semester (total 32 - 34 minggu setahun).</span>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* Tab 4: Pool Gemini API */}
+            {mainTab === 'api' && (
+                <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6 space-y-6">
+                    <div className="border-b pb-4">
+                        <h2 className="text-xl font-bold text-slate-800">Konfigurasi & Pool Gemini API</h2>
+                        <p className="text-sm text-slate-500 mt-1">
+                            Atur API Key utama dan ketersediaan API Key cadangan. Sistem akan memutar penggunaan key secara otomatis jika salah satu key cadangan mendeteksi batas limit harian tercapai.
+                        </p>
+                    </div>
+
+                    <div className="bg-blue-50 border border-blue-200 text-blue-800 rounded-lg p-4 text-sm flex gap-3">
+                        <span className="text-lg">⚙️</span>
+                        <div>
+                            <strong className="block mb-0.5">Sistem Rotasi API Key Otomatis Aktif</strong>
+                            Saat proses men-generate modul ajar atau perangkat ajar, apabila API Key yang sedang digunakan menyentuh batas limit harian (<code className="bg-blue-100 px-1 rounded text-xs font-mono">Quota Exceeded / 429</code>), sistem akan otomatis memperbarui statusnya menjadi <span className="font-semibold text-amber-700">"Limit Tercapai"</span> di database dan memindahkan pemrosesan ke API Key cadangan berikutnya yang berstatus <span className="font-semibold text-green-700">"Aktif"</span> secara real-time tanpa mengganggu kenyamanan pengguna.
+                        </div>
+                    </div>
+
+                    {/* Primary API Key */}
+                    <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-2">Gemini API Key Utama (Default Fallback)</label>
+                        <input 
+                            type="password"
+                            value={settings.geminiApiKey}
+                            onChange={(e) => setSettings({...settings, geminiApiKey: e.target.value})}
+                            placeholder="AIzaSy..."
+                            className="w-full border border-slate-300 rounded-md p-2.5 focus:ring-teal-500 focus:border-teal-500 font-mono text-sm"
+                        />
+                        <p className="mt-2 text-sm text-slate-500">
+                            API Key default yang digunakan sebagai prioritas terakhir apabila pool API Key cadangan kosong atau seluruhnya tidak aktif.
+                        </p>
+                    </div>
+
+                    <div className="border-t pt-6 space-y-4">
+                        <h3 className="font-bold text-slate-800 text-lg">Pool API Key Cadangan</h3>
+                        
+                        {/* Add Key Form */}
+                        <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-3">
+                            <span className="text-sm font-semibold text-slate-700 block">Tambah API Key Baru ke Pool</span>
+                            <div className="flex flex-col md:flex-row gap-3">
+                                <input 
+                                    type="text"
+                                    value={newKeyName}
+                                    onChange={(e) => setNewKeyName(e.target.value)}
+                                    placeholder="Nama/Label Key (misal: Akun Cadangan B)"
+                                    className="flex-1 border border-slate-300 rounded-md p-2 text-sm focus:ring-teal-500 focus:border-teal-500"
+                                />
+                                <input 
+                                    type="text"
+                                    value={newKeyValue}
+                                    onChange={(e) => setNewKeyValue(e.target.value)}
+                                    placeholder="API Key (AIzaSy...)"
+                                    className="flex-1 border border-slate-300 rounded-md p-2 text-sm focus:ring-teal-500 focus:border-teal-500 font-mono"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={handleAddApiKey}
+                                    disabled={!newKeyValue.trim()}
+                                    className="bg-teal-600 hover:bg-teal-700 text-white font-semibold text-sm px-5 py-2 rounded-md transition disabled:opacity-50"
+                                >
+                                    + Tambahkan ke Pool
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Keys Table */}
+                        {apiKeys.length === 0 ? (
+                            <div className="text-center py-8 text-slate-400 text-sm border border-dashed border-slate-200 rounded-lg font-medium">
+                                Belum ada API Key cadangan dalam pool. Silakan tambahkan kunci di atas untuk mengaktifkan fitur rotasi otomatis.
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto border border-slate-200 rounded-lg shadow-sm">
+                                <table className="w-full text-left border-collapse text-sm">
+                                    <thead>
+                                        <tr className="bg-slate-100 border-b border-slate-200 text-slate-700 font-semibold">
+                                            <th className="p-3">Nama / Label</th>
+                                            <th className="p-3">API Key</th>
+                                            <th className="p-3">Status</th>
+                                            <th className="p-3">Terakhir Digunakan</th>
+                                            <th className="p-3">Keterangan / Error</th>
+                                            <th className="p-3 text-center">Aksi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-200 text-slate-700">
+                                        {apiKeys.map((k) => {
+                                            const isVisible = visibleKeys[k.id];
+                                            return (
+                                                <tr key={k.id} className="hover:bg-slate-50 transition">
+                                                    <td className="p-3 font-medium text-slate-800">{k.name}</td>
+                                                    <td className="p-3 font-mono text-xs">
+                                                        <div className="flex items-center gap-2">
+                                                            <span>
+                                                                {isVisible 
+                                                                    ? k.key 
+                                                                    : `${k.key.substring(0, 8)}...${k.key.substring(k.key.length - 4)}`}
+                                                            </span>
                                                             <button
                                                                 type="button"
-                                                                onClick={() => handleToggleApiKeyStatus(k.id, 'Aktif')}
-                                                                className="text-xs bg-green-600 hover:bg-green-700 text-white px-2.5 py-1 rounded font-semibold transition"
-                                                                title="Reset status menjadi Aktif"
+                                                                onClick={() => toggleKeyVisibility(k.id)}
+                                                                className="text-slate-400 hover:text-slate-600 transition"
+                                                                title={isVisible ? "Sembunyikan" : "Tampilkan"}
                                                             >
-                                                                Aktifkan Kembali
+                                                                {isVisible ? (
+                                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18"></path></svg>
+                                                                ) : (
+                                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                                                                )}
                                                             </button>
-                                                        )}
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleDeleteApiKey(k.id)}
-                                                            className="text-red-500 hover:text-red-700 p-1.5 hover:bg-red-50 rounded-md transition"
-                                                            title="Hapus Key"
-                                                        >
-                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-3">
+                                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
+                                                            k.status === 'Aktif' 
+                                                                ? 'bg-green-100 text-green-800 border-green-200' 
+                                                                : k.status === 'Limit Tercapai'
+                                                                    ? 'bg-amber-100 text-amber-800 border-amber-200'
+                                                                    : 'bg-red-100 text-red-800 border-red-200'
+                                                        }`}>
+                                                            {k.status}
+                                                        </span>
+                                                    </td>
+                                                    <td className="p-3 text-xs text-slate-500 font-medium">{formatLastUsed(k.lastUsed)}</td>
+                                                    <td className="p-3 text-xs text-slate-500 max-w-xs truncate" title={k.errorMessage || ''}>
+                                                        {k.errorMessage || '-'}
+                                                    </td>
+                                                    <td className="p-3 text-center">
+                                                        <div className="flex items-center justify-center gap-2">
+                                                            {k.status !== 'Aktif' && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleToggleApiKeyStatus(k.id, 'Aktif')}
+                                                                    className="text-xs bg-green-600 hover:bg-green-700 text-white px-2.5 py-1 rounded font-semibold transition"
+                                                                    title="Reset status menjadi Aktif"
+                                                                >
+                                                                    Aktifkan Kembali
+                                                                </button>
+                                                            )}
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleDeleteApiKey(k.id)}
+                                                                className="text-red-500 hover:text-red-700 p-1.5 hover:bg-red-50 rounded-md transition"
+                                                                title="Hapus Key"
+                                                            >
+                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* Tab 5: Manajemen Database */}
+            {mainTab === 'db' && (
+                <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6 space-y-6">
+                    <div className="border-b pb-4 flex items-center gap-3">
+                        <div className="p-2.5 bg-teal-100 rounded-xl text-teal-800">
+                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s-8-1.79-8-4" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 className="text-xl font-bold text-slate-800">Manajemen Database & Backup (JSON)</h2>
+                            <p className="text-sm text-slate-500 mt-0.5">Pusat kontrol ekspor, impor cadangan JSON, serta pengosongan database.</p>
+                        </div>
+                    </div>
+
+                    {clearStatusMessage && (
+                        <div className={`p-4 rounded-xl flex items-center justify-between ${clearStatusMessage.type === 'success' ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' : 'bg-red-50 border border-red-200 text-red-800'}`}>
+                            <span className="font-medium text-sm">{clearStatusMessage.text}</span>
+                            <button onClick={() => setClearStatusMessage(null)} className="text-xs font-bold underline">Tutup</button>
                         </div>
                     )}
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {/* Card 1: Import JSON */}
+                        <div className="bg-slate-50 p-5 rounded-xl border border-slate-200 flex flex-col justify-between hover:shadow-md transition">
+                            <div>
+                                <div className="flex items-center gap-3 mb-3">
+                                    <div className="p-2.5 bg-teal-600 text-white rounded-lg">
+                                        <UploadIcon className="w-5 h-5" />
+                                    </div>
+                                    <h3 className="text-lg font-bold text-slate-800">Impor Data JSON</h3>
+                                </div>
+                                <p className="text-xs text-slate-600 leading-relaxed mb-4">
+                                    Unggah file JSON cadangan untuk memulihkan atau memasukkan data TP, ATP, Prota, KKTP, Prosem, RPM, serta Pengaturan Admin.
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={onOpenImportModal}
+                                className="w-full py-2.5 px-4 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-lg text-sm shadow-sm transition flex items-center justify-center gap-2"
+                            >
+                                <UploadIcon className="w-4 h-4 text-white" />
+                                <span>Buka Impor JSON</span>
+                            </button>
+                        </div>
+
+                        {/* Card 2: Export JSON */}
+                        <div className="bg-slate-50 p-5 rounded-xl border border-slate-200 flex flex-col justify-between hover:shadow-md transition">
+                            <div>
+                                <div className="flex items-center gap-3 mb-3">
+                                    <div className="p-2.5 bg-slate-700 text-white rounded-lg">
+                                        <DownloadIcon className="w-5 h-5" />
+                                    </div>
+                                    <h3 className="text-lg font-bold text-slate-800">Ekspor Full Backup JSON</h3>
+                                </div>
+                                <p className="text-xs text-slate-600 leading-relaxed mb-4">
+                                    Unduh seluruh isi database aplikasi (TP, ATP, Prota, KKTP, Prosem, RPM, dan Pengaturan Admin) ke dalam file `.json`.
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={onOpenExportModal}
+                                className="w-full py-2.5 px-4 bg-slate-800 hover:bg-slate-900 text-white font-semibold rounded-lg text-sm shadow-sm transition flex items-center justify-center gap-2"
+                            >
+                                <DownloadIcon className="w-4 h-4 text-white" />
+                                <span>Buka Ekspor JSON</span>
+                            </button>
+                        </div>
+
+                        {/* Card 3: Delete Database */}
+                        <div className="bg-red-50/70 p-5 rounded-xl border border-red-200 flex flex-col justify-between hover:shadow-md transition">
+                            <div>
+                                <div className="flex items-center gap-3 mb-3">
+                                    <div className="p-2.5 bg-red-600 text-white rounded-lg">
+                                        <TrashIcon className="w-5 h-5" />
+                                    </div>
+                                    <h3 className="text-lg font-bold text-red-900">Kosongkan Database</h3>
+                                </div>
+                                <p className="text-xs text-red-700 leading-relaxed mb-4">
+                                    Menghapus SELURUH data perangkat ajar dan perizinan. Menjadikan aplikasi bersih dan siap diimpor.
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={handleClearDatabaseClick}
+                                disabled={isClearing}
+                                className="w-full py-2.5 px-4 bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white font-semibold rounded-lg text-sm shadow-sm transition flex items-center justify-center gap-2"
+                            >
+                                {isClearing ? (
+                                    <>
+                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                        <span>Menghapus Database...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <TrashIcon className="w-4 h-4 text-white" />
+                                        <span>Hapus Seluruh Database</span>
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
                 </div>
-            </div>
+            )}
 
             {message && (
                 <div className={`p-4 rounded-md font-medium ${message.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
