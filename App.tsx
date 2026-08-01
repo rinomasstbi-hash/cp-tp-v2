@@ -2810,29 +2810,41 @@ const App: React.FC = () => {
         return <AdminDashboard onBack={() => setView('select_subject')} showConfirm={showConfirm} refreshSettings={refreshSettings} />;
 
       case 'select_subject':
-        if (quotaExceeded && !quotaDismissed) {
+        if (quotaExceeded) {
           return (
             <div className="max-w-4xl mx-auto px-4 py-20 text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
               <div className="bg-white p-10 rounded-2xl shadow-xl border border-amber-100">
                 <div className="w-20 h-20 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-6">
                   <AlertIcon className="w-10 h-10 text-amber-500" />
                 </div>
-                <h2 className="text-3xl font-bold text-slate-800 mb-4">Mohon Maaf, Guru-Guru Hebat</h2>
-                <p className="text-xl text-slate-600 leading-relaxed mb-6">
-                  Saat ini batas penggunaan sistem (kuota) telah tercapai. 
-                  Mohon bersabar sejenak menunggu token di-reset secara otomatis oleh sistem.
+                <h2 className="text-3xl font-bold text-slate-800 mb-4">Pemberitahuan Sistem</h2>
+                <p className="text-xl text-slate-700 leading-relaxed mb-6 font-medium">
+                  Mohon maaf kepada Bapak/Ibu Guru hebat, batas pemakaian sesi ini telah habis. Aplikasi dapat dibuka kembali malam nanti atau esok hari.
                 </p>
                 <div className="bg-slate-50 p-6 rounded-xl border border-slate-100 text-slate-500 italic mb-8">
-                  "Terima kasih atas dedikasi luar biasa Bapak/Ibu Guru dalam mendidik generasi bangsa. 
-                  Kami sedang mengupayakan agar sistem dapat segera digunakan kembali."
+                  "Terima kasih atas dedikasi dan kesabaran luar biasa Bapak/Ibu Guru dalam mendidik generasi bangsa."
                 </div>
-                <button 
-                  onClick={() => window.location.reload()}
-                  className="bg-teal-600 hover:bg-teal-700 text-white font-semibold py-3 px-10 rounded-xl transition-all shadow-lg shadow-teal-100 flex items-center gap-2 mx-auto"
-                >
-                  <RefreshIcon className="w-5 h-5" />
-                  Cek Status Sistem
-                </button>
+                <div className="flex flex-wrap justify-center gap-4">
+                  <button 
+                    onClick={() => window.location.reload()}
+                    className="bg-teal-600 hover:bg-teal-700 text-white font-semibold py-3 px-8 rounded-xl transition-all shadow-lg shadow-teal-100 flex items-center gap-2"
+                  >
+                    <RefreshIcon className="w-5 h-5" />
+                    Cek Status Sistem
+                  </button>
+                  {isAdmin && (
+                    <button 
+                      onClick={() => {
+                        apiService.clearQuotaExceeded();
+                        setQuotaExceeded(false);
+                        setToastMessage('Status kuota berhasil direset oleh Admin.');
+                      }}
+                      className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-3 px-8 rounded-xl transition-all shadow-lg shadow-amber-100 flex items-center gap-2"
+                    >
+                      Reset Status Kuota (Admin)
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           );
@@ -3908,38 +3920,6 @@ const App: React.FC = () => {
   return (
     <div className="bg-slate-100 min-h-screen">
       <Header userEmail={user?.email} currentView={view} onViewChange={(v) => setView(v as View | 'admin_dashboard')} onLogin={() => setShowLoginModal(true)} globalSettings={globalSettings} isAdmin={isAdmin} />
-      {quotaExceeded && !quotaDismissed && (
-        <div className="bg-amber-600 text-white px-4 py-3 shadow-md print:hidden flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-sm">
-          <div className="flex items-start sm:items-center gap-3">
-            <AlertIcon className="w-6 h-6 flex-shrink-0 text-amber-100 mt-0.5 sm:mt-0" />
-            <div>
-              <span className="font-bold block sm:inline">Pemberitahuan Mode Baca (Read-Only)</span>
-              <span className="sm:ml-2 text-amber-100">
-                Batas kuota pernah tercapai. Jika Anda telah meng-upgrade ke paket Blaze / mereset kuota, klik tombol reset di sebelah kanan untuk mengaktifkan kembali mode normal.
-              </span>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-center">
-            <button
-              onClick={() => {
-                apiService.clearQuotaExceeded();
-                setQuotaExceeded(false);
-                setQuotaDismissed(true);
-                setToastMessage('Status kuota berhasil direset. Seluruh fitur telah diaktifkan kembali.');
-              }}
-              className="bg-amber-800 hover:bg-amber-900 text-white text-xs px-3 py-1.5 rounded-md font-semibold transition"
-            >
-              Reset Status Kuota
-            </button>
-            <button
-              onClick={() => setQuotaDismissed(true)}
-              className="bg-amber-700/60 hover:bg-amber-800 text-amber-100 text-xs px-2.5 py-1.5 rounded-md transition"
-            >
-              Tutup
-            </button>
-          </div>
-        </div>
-      )}
       {showLoginModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
           <div className="relative bg-white rounded-lg shadow-lg max-w-md w-full">
