@@ -4144,20 +4144,12 @@ const App: React.FC = () => {
                 <AlertIcon className="h-5 w-5 text-amber-600" />
               </div>
               <div className="pr-8 space-y-1.5">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="text-sm font-bold text-amber-900">Permohonan Maaf &amp; Pemberitahuan Kuota Cloud</h3>
-                  <span className="text-[11px] font-medium px-2 py-0.5 bg-amber-200/80 text-amber-800 rounded-full">
-                    Mode Lokal Aktif
-                  </span>
-                </div>
+                <h3 className="text-sm font-bold text-amber-900">Permohonan Maaf &amp; Pemberitahuan Kuota</h3>
                 <p className="text-xs text-amber-800 leading-relaxed">
-                  Kami memohon maaf yang sebesar-besarnya kepada <strong>Bapak/Ibu Guru</strong> atas ketidaknyamanan ini. Batas kuota harian cloud (Firebase Firestore) telah tercapai untuk hari ini.
-                </p>
-                <p className="text-xs text-amber-800 leading-relaxed">
-                  Bapak/Ibu Guru tidak perlu khawatir, <strong>seluruh fitur aplikasi</strong> (seperti penyusunan &amp; pengeditan TP, ATP, Prota, KKTP, Prosem, RPM, serta cetak dan ekspor/impor JSON) <strong>tetap berfungsi penuh 100%</strong> menggunakan Penyimpanan Lokal di perangkat Anda.
+                  Kami memohon maaf yang sebesar-besarnya kepada Bapak/Ibu Guru atas ketidaknyamanan ini. Batas kuota harian telah tercapai untuk hari ini.
                 </p>
                 <p className="text-xs text-amber-900 font-medium leading-relaxed pt-0.5">
-                  🔄 Kuota cloud akan <strong>otomatis di-reset oleh sistem Firebase besok pukul 14:00 WIB</strong> (00:00 PST), sehingga data Anda dapat kembali tersinkronisasi secara cloud. Terima kasih banyak atas pengertian dan kesabaran Bapak/Ibu Guru.
+                  🔄 Kuota akan otomatis di-reset oleh sistem besok pukul 14:00 WIB. Terima kasih banyak atas pengertian dan kesabaran Bapak/Ibu Guru.
                 </p>
               </div>
               <button 
