@@ -349,14 +349,14 @@ const App: React.FC = () => {
     if (!err) return 'Terjadi kesalahan tidak terduga';
     const raw = typeof err === 'string' ? err : (err.message || String(err));
     if (raw.includes('Quota limit exceeded') || raw.includes('resource-exhausted') || raw.includes('quota') || raw.includes('429')) {
-      return 'Batas kuota harian layanan tercapai. Sistem berjalan dalam Mode Baca (Read-Only). Anda dapat membaca, meninjau, dan mencetak dokumen yang ada.';
+      return 'Mohon maaf Bapak/Ibu Guru, batas kuota harian cloud telah tercapai. Aplikasi otomatis beralih ke Mode Penyimpanan Lokal agar pekerjaan Anda tetap aman dan dapat dicetak/dieksport.';
     }
     if (raw.startsWith('{') && raw.endsWith('}')) {
       try {
         const parsed = JSON.parse(raw);
         if (parsed.error) {
           if (parsed.error.includes('Quota') || parsed.error.includes('resource-exhausted')) {
-            return 'Batas kuota harian database tercapai. Sistem berjalan dalam Mode Baca (Read-Only).';
+            return 'Mohon maaf Bapak/Ibu Guru, batas kuota harian database tercapai. Sistem berjalan lancar dalam Mode Penyimpanan Lokal.';
           }
           return parsed.error;
         }
@@ -2904,45 +2904,6 @@ const App: React.FC = () => {
         );
 
       case 'select_subject':
-        if (quotaExceeded) {
-          return (
-            <div className="max-w-4xl mx-auto px-4 py-20 text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="bg-white p-10 rounded-2xl shadow-xl border border-amber-100">
-                <div className="w-20 h-20 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-6">
-                  <AlertIcon className="w-10 h-10 text-amber-500" />
-                </div>
-                <h2 className="text-3xl font-bold text-slate-800 mb-4">Pemberitahuan Sistem</h2>
-                <p className="text-xl text-slate-700 leading-relaxed mb-6 font-medium">
-                  Mohon maaf kepada Bapak/Ibu Guru hebat, batas pemakaian sesi ini telah habis. Aplikasi dapat dibuka kembali malam nanti atau esok hari.
-                </p>
-                <div className="bg-slate-50 p-6 rounded-xl border border-slate-100 text-slate-500 italic mb-8">
-                  "Terima kasih atas dedikasi dan kesabaran luar biasa Bapak/Ibu Guru dalam mendidik generasi bangsa."
-                </div>
-                <div className="flex flex-wrap justify-center gap-4">
-                  <button 
-                    onClick={() => window.location.reload()}
-                    className="bg-teal-600 hover:bg-teal-700 text-white font-semibold py-3 px-8 rounded-xl transition-all shadow-lg shadow-teal-100 flex items-center gap-2"
-                  >
-                    <RefreshIcon className="w-5 h-5" />
-                    Cek Status Sistem
-                  </button>
-                  {isAdmin && (
-                    <button 
-                      onClick={() => {
-                        apiService.clearQuotaExceeded();
-                        setQuotaExceeded(false);
-                        setTransientMessage('Status kuota berhasil direset oleh Admin.');
-                      }}
-                      className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-3 px-8 rounded-xl transition-all shadow-lg shadow-amber-100 flex items-center gap-2"
-                    >
-                      Reset Status Kuota (Admin)
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          );
-        }
         return <SubjectSelector 
           onSelectSubject={handleSelectSubject} 
           isAdmin={isAdmin} 
@@ -4178,19 +4139,30 @@ const App: React.FC = () => {
       <main>
         {quotaExceeded && !quotaDismissed && (
           <div className="max-w-7xl mx-auto px-4 mt-4 print:hidden">
-            <div className="p-4 bg-amber-50 border border-amber-300 rounded-xl shadow-sm text-left relative flex items-start gap-3">
-              <div className="p-2 bg-amber-100 text-amber-800 rounded-lg flex-shrink-0">
+            <div className="p-4 bg-amber-50/90 border border-amber-300/80 rounded-xl shadow-sm text-left relative flex items-start gap-3">
+              <div className="p-2.5 bg-amber-100 text-amber-800 rounded-lg flex-shrink-0 mt-0.5">
                 <AlertIcon className="h-5 w-5 text-amber-600" />
               </div>
-              <div className="pr-8">
-                <h3 className="text-sm font-bold text-amber-900">Mode Penyimpanan Lokal Aktif (Kuota Harian Cloud Terlampaui)</h3>
-                <p className="mt-1 text-xs text-amber-800 leading-relaxed">
-                  Batas kuota harian Firebase Firestore (unit tulis/baca harian gratis) telah tercapai untuk hari ini. Seluruh fitur pembuatan, pengeditan, penyusunan ATP/Prota/KKTP/Prosem/RPM, cetak, dan ekspor/impor JSON tetap berfungsi penuh dengan penyimpanan lokal browser. Kuota cloud akan otomatis di-reset oleh Firebase besok.
+              <div className="pr-8 space-y-1.5">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-sm font-bold text-amber-900">Permohonan Maaf &amp; Pemberitahuan Kuota Cloud</h3>
+                  <span className="text-[11px] font-medium px-2 py-0.5 bg-amber-200/80 text-amber-800 rounded-full">
+                    Mode Lokal Aktif
+                  </span>
+                </div>
+                <p className="text-xs text-amber-800 leading-relaxed">
+                  Kami memohon maaf yang sebesar-besarnya kepada <strong>Bapak/Ibu Guru</strong> atas ketidaknyamanan ini. Batas kuota harian cloud (Firebase Firestore) telah tercapai untuk hari ini.
+                </p>
+                <p className="text-xs text-amber-800 leading-relaxed">
+                  Bapak/Ibu Guru tidak perlu khawatir, <strong>seluruh fitur aplikasi</strong> (seperti penyusunan &amp; pengeditan TP, ATP, Prota, KKTP, Prosem, RPM, serta cetak dan ekspor/impor JSON) <strong>tetap berfungsi penuh 100%</strong> menggunakan Penyimpanan Lokal di perangkat Anda.
+                </p>
+                <p className="text-xs text-amber-900 font-medium leading-relaxed pt-0.5">
+                  🔄 Kuota cloud akan <strong>otomatis di-reset oleh sistem Firebase besok pukul 14:00 WIB</strong> (00:00 PST), sehingga data Anda dapat kembali tersinkronisasi secara cloud. Terima kasih banyak atas pengertian dan kesabaran Bapak/Ibu Guru.
                 </p>
               </div>
               <button 
                 onClick={() => setQuotaDismissed(true)} 
-                className="absolute top-3 right-3 p-1.5 text-amber-700 hover:bg-amber-200 rounded-full transition" 
+                className="absolute top-3 right-3 p-1.5 text-amber-700 hover:bg-amber-200/70 rounded-full transition" 
                 title="Tutup pemberitahuan"
               >
                 <CloseIcon className="w-4 h-4" />
