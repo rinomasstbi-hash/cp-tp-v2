@@ -189,6 +189,135 @@ const SemesterDisplay: React.FC<{ title: string; groups: TPGroup[]; numberingOff
 };
 
 
+const CountdownPopup: React.FC<{
+  quotaExceeded: boolean;
+  onClearQuota: () => void;
+  isAdmin: boolean;
+}> = ({ quotaExceeded, onClearQuota, isAdmin }) => {
+  const [timeLeft, setTimeLeft] = useState({ hours: 0, minutes: 0, seconds: 0 });
+
+  useEffect(() => {
+    if (!quotaExceeded) return;
+
+    const calculateTimeLeft = () => {
+      const now = new Date();
+      // Target is 14:10 WIB (which is 07:10 UTC)
+      const target = new Date(Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth(),
+        now.getUTCDate(),
+        7, 10, 0, 0
+      ));
+
+      // If we are already past 07:10 UTC today, then target is tomorrow 07:10 UTC
+      if (now.getTime() >= target.getTime()) {
+        target.setUTCDate(target.getUTCDate() + 1);
+      }
+
+      const diffMs = target.getTime() - now.getTime();
+      
+      const hours = Math.floor(diffMs / (1000 * 60 * 60));
+      const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((diffMs % (1000 * 60)) / 1000);
+
+      return { hours, minutes, seconds };
+    };
+
+    setTimeLeft(calculateTimeLeft());
+
+    const timer = setInterval(() => {
+      setTimeLeft(calculateTimeLeft());
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [quotaExceeded]);
+
+  if (!quotaExceeded) return null;
+
+  return (
+    <div className="fixed inset-0 bg-slate-900 flex items-center justify-center p-4 z-[99999] overflow-y-auto">
+      <div className="bg-white max-w-xl w-full rounded-2xl p-8 sm:p-10 shadow-2xl border border-amber-100 text-center relative flex flex-col items-center">
+        {/* Animated Warning Icon */}
+        <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center mb-6 border border-amber-200/50 animate-pulse">
+          <AlertIcon className="w-8 h-8 text-amber-500" />
+        </div>
+
+        {/* Title */}
+        <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-800 tracking-tight leading-tight">
+          Permohonan Maaf &amp; Pemberitahuan Kuota
+        </h2>
+        
+        {/* Subtitle / Status Badge */}
+        <span className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 bg-amber-100 text-amber-900 font-bold text-xs rounded-full uppercase tracking-wider">
+          <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+          Sistem Sedang Dibatasi
+        </span>
+
+        {/* Message */}
+        <div className="mt-6 space-y-4 max-w-md">
+          <p className="text-slate-600 text-sm sm:text-base leading-relaxed">
+            Kami memohon maaf yang sebesar-besarnya kepada <strong>Bapak/Ibu Guru</strong> atas ketidaknyamanan ini. Batas kuota harian telah tercapai untuk hari ini.
+          </p>
+          <p className="text-slate-500 text-xs sm:text-sm italic">
+            "Terima kasih banyak atas pengertian dan kesabaran Bapak/Ibu Guru."
+          </p>
+        </div>
+
+        {/* Countdown Card */}
+        <div className="mt-8 bg-slate-50 border border-slate-200/60 rounded-2xl p-6 w-full flex flex-col items-center">
+          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">
+            Kuota Otomatis Reset Dalam:
+          </span>
+          <div className="flex items-center gap-3 sm:gap-4">
+            <div className="flex flex-col items-center">
+              <span className="text-3xl sm:text-4xl font-extrabold text-slate-800 bg-white shadow-sm border border-slate-200 rounded-xl px-3 py-2 min-w-[3.5rem]">
+                {String(timeLeft.hours).padStart(2, '0')}
+              </span>
+              <span className="text-[10px] font-semibold text-slate-400 mt-1 uppercase">Jam</span>
+            </div>
+            <span className="text-2xl font-black text-slate-300 -mt-4">:</span>
+            <div className="flex flex-col items-center">
+              <span className="text-3xl sm:text-4xl font-extrabold text-slate-800 bg-white shadow-sm border border-slate-200 rounded-xl px-3 py-2 min-w-[3.5rem]">
+                {String(timeLeft.minutes).padStart(2, '0')}
+              </span>
+              <span className="text-[10px] font-semibold text-slate-400 mt-1 uppercase">Menit</span>
+            </div>
+            <span className="text-2xl font-black text-slate-300 -mt-4">:</span>
+            <div className="flex flex-col items-center">
+              <span className="text-3xl sm:text-4xl font-extrabold text-slate-800 bg-white shadow-sm border border-slate-200 rounded-xl px-3 py-2 min-w-[3.5rem]">
+                {String(timeLeft.seconds).padStart(2, '0')}
+              </span>
+              <span className="text-[10px] font-semibold text-slate-400 mt-1 uppercase">Detik</span>
+            </div>
+          </div>
+          <div className="mt-4 text-xs font-semibold text-amber-800 bg-amber-50 px-3.5 py-1.5 rounded-full border border-amber-200/50 flex items-center gap-1.5">
+            <span>🔄 Kuota otomatis di-reset besok pukul <strong>14:10 WIB</strong></span>
+          </div>
+        </div>
+
+        {/* Action Button */}
+        <div className="mt-8 flex flex-col sm:flex-row gap-3 w-full justify-center">
+          <button 
+            onClick={() => window.location.reload()}
+            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition shadow-sm"
+          >
+            <RefreshIcon className="w-4 h-4" />
+            <span>Muat Ulang Halaman</span>
+          </button>
+          
+          <button 
+            onClick={onClearQuota}
+            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold text-amber-900 bg-amber-100 hover:bg-amber-200 rounded-xl transition border border-amber-200/40 shadow-sm"
+          >
+            <span>Buka Aplikasi (Lewati)</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
@@ -3986,6 +4115,20 @@ const App: React.FC = () => {
     );
   }
 
+  if (quotaExceeded && !quotaDismissed) {
+    return (
+      <CountdownPopup
+        quotaExceeded={quotaExceeded}
+        onClearQuota={() => {
+          apiService.clearQuotaExceeded();
+          setQuotaExceeded(false);
+          setQuotaDismissed(true);
+        }}
+        isAdmin={isAdmin}
+      />
+    );
+  }
+
   return (
     <div className="bg-slate-100 min-h-screen">
       <Header
@@ -4137,47 +4280,6 @@ const App: React.FC = () => {
       />
 
       <main>
-        {quotaExceeded && !quotaDismissed && (
-          <div className="max-w-7xl mx-auto px-4 mt-4 print:hidden">
-            <div className="p-4 bg-amber-50/90 border border-amber-300/80 rounded-xl shadow-sm text-left relative flex items-start gap-3">
-              <div className="p-2.5 bg-amber-100 text-amber-800 rounded-lg flex-shrink-0 mt-0.5">
-                <AlertIcon className="h-5 w-5 text-amber-600" />
-              </div>
-              <div className="pr-8 space-y-1.5 w-full">
-                <h3 className="text-sm font-bold text-amber-900">Permohonan Maaf &amp; Pemberitahuan Kuota</h3>
-                <p className="text-xs text-amber-800 leading-relaxed">
-                  Kami memohon maaf yang sebesar-besarnya kepada Bapak/Ibu Guru atas ketidaknyamanan ini. Batas kuota harian telah tercapai untuk hari ini.
-                </p>
-                <p className="text-xs text-amber-900 font-medium leading-relaxed pt-0.5">
-                  🔄 Kuota akan otomatis di-reset oleh sistem besok pukul 14:00 WIB. Terima kasih banyak atas pengertian dan kesabaran Bapak/Ibu Guru.
-                </p>
-                <div className="pt-2">
-                  <button
-                    onClick={() => {
-                      apiService.clearQuotaExceeded();
-                      setQuotaExceeded(false);
-                      setQuotaDismissed(true);
-                    }}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-amber-900 bg-amber-200/60 hover:bg-amber-200 rounded-lg transition"
-                  >
-                    <span>Sudah Upgrade / Hapus Notifikasi Ini</span>
-                  </button>
-                </div>
-              </div>
-              <button 
-                onClick={() => {
-                  apiService.clearQuotaExceeded();
-                  setQuotaExceeded(false);
-                  setQuotaDismissed(true);
-                }} 
-                className="absolute top-3 right-3 p-1.5 text-amber-700 hover:bg-amber-200/70 rounded-full transition" 
-                title="Tutup pemberitahuan"
-              >
-                <CloseIcon className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        )}
         {globalError && view !== 'view_tp_list' && (
           <div className="max-w-7xl mx-auto px-4 mt-6">
             <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-left relative">
