@@ -96,6 +96,19 @@ const Header: React.FC<{
           </div>
         </div>
       </div>
+
+      {/* Running Announcement Banner */}
+      <div className="bg-amber-50 border-t border-amber-200/50 text-amber-800 py-2 px-4 overflow-hidden shadow-inner flex items-center select-none">
+        <div className="max-w-7xl mx-auto w-full flex items-center gap-3">
+          <span className="flex-shrink-0 inline-flex items-center gap-1 bg-amber-600 text-white rounded px-2 py-0.5 font-extrabold text-[10px] sm:text-xs tracking-wider uppercase whitespace-nowrap">
+            ⚠️ PENGUMUMAN
+          </span>
+          {React.createElement('marquee', {
+            className: 'text-xs sm:text-sm font-semibold tracking-wide flex-grow mt-0.5',
+            scrollamount: '4'
+          } as any, 'Untuk optimalisasi akses aplikasi ini semua perangkat yang telah dibuat akan direset/dihapus setiap hari, untuk itu silahkan download setiap kali menghasilkan perangkat. Demikian terima kasih.')}
+        </div>
+      </div>
     </header>
   );
 };
