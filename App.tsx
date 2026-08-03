@@ -4143,7 +4143,7 @@ const App: React.FC = () => {
               <div className="p-2.5 bg-amber-100 text-amber-800 rounded-lg flex-shrink-0 mt-0.5">
                 <AlertIcon className="h-5 w-5 text-amber-600" />
               </div>
-              <div className="pr-8 space-y-1.5">
+              <div className="pr-8 space-y-1.5 w-full">
                 <h3 className="text-sm font-bold text-amber-900">Permohonan Maaf &amp; Pemberitahuan Kuota</h3>
                 <p className="text-xs text-amber-800 leading-relaxed">
                   Kami memohon maaf yang sebesar-besarnya kepada Bapak/Ibu Guru atas ketidaknyamanan ini. Batas kuota harian telah tercapai untuk hari ini.
@@ -4151,9 +4151,25 @@ const App: React.FC = () => {
                 <p className="text-xs text-amber-900 font-medium leading-relaxed pt-0.5">
                   🔄 Kuota akan otomatis di-reset oleh sistem besok pukul 14:00 WIB. Terima kasih banyak atas pengertian dan kesabaran Bapak/Ibu Guru.
                 </p>
+                <div className="pt-2">
+                  <button
+                    onClick={() => {
+                      apiService.clearQuotaExceeded();
+                      setQuotaExceeded(false);
+                      setQuotaDismissed(true);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-amber-900 bg-amber-200/60 hover:bg-amber-200 rounded-lg transition"
+                  >
+                    <span>Sudah Upgrade / Hapus Notifikasi Ini</span>
+                  </button>
+                </div>
               </div>
               <button 
-                onClick={() => setQuotaDismissed(true)} 
+                onClick={() => {
+                  apiService.clearQuotaExceeded();
+                  setQuotaExceeded(false);
+                  setQuotaDismissed(true);
+                }} 
                 className="absolute top-3 right-3 p-1.5 text-amber-700 hover:bg-amber-200/70 rounded-full transition" 
                 title="Tutup pemberitahuan"
               >
