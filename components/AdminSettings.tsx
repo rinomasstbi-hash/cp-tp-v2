@@ -1,5 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { getAdminSettings, saveAdminSettings, clearAllDatabase, AdminSettings as SettingsType } from '../services/dbService';
+import { 
+    getAdminSettings, 
+    saveAdminSettings, 
+    clearAllDatabase, 
+    AdminSettings as SettingsType,
+    getBackups,
+    deleteBackup,
+    restoreBackup,
+    runArchivingProcedure,
+    getArchivablePeriods,
+    getPeriodKey,
+    BackupItem,
+    PeriodSummary
+} from '../services/dbService';
 import { ApiKeyItem } from '../types';
 import { UploadIcon, DownloadIcon, TrashIcon } from './icons';
 
@@ -137,6 +150,11 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({
     const [isClearing, setIsClearing] = useState(false);
     const [clearStatusMessage, setClearStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+    const [backups, setBackups] = useState<BackupItem[]>([]);
+    const [archivablePeriods, setArchivablePeriods] = useState<PeriodSummary[]>([]);
+    const [loadingBackups, setLoadingBackups] = useState(false);
+    const [backupMessage, setBackupMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
     const handleClearDatabaseClick = () => {
         if (!showConfirm) return;
         showConfirm(
@@ -195,6 +213,160 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({
         };
         fetchSettings();
     }, []);
+
+    const loadBackupData = async (interval: 'daily' | 'monthly' = settings.autoBackupInterval || 'monthly') => {
+        setLoadingBackups(true);
+        try {
+            const bList = await getBackups();
+            setBackups(bList);
+            const pSummary = await getArchivablePeriods(interval);
+            setArchivablePeriods(pSummary);
+        } catch (err: any) {
+            console.error("Gagal memuat data backup:", err);
+        } finally {
+            setLoadingBackups(false);
+        }
+    };
+
+    useEffect(() => {
+        if (mainTab === 'db') {
+            loadBackupData(settings.autoBackupInterval || 'monthly');
+        }
+    }, [mainTab, settings.autoBackupInterval]);
+
+    useEffect(() => {
+        const checkAutoBackup = async () => {
+            if (mainTab === 'db' && settings.autoBackupEnabled) {
+                try {
+                    const interval = settings.autoBackupInterval || 'monthly';
+                    const summaries = await getArchivablePeriods(interval);
+                    
+                    const now = new Date();
+                    const currentKey = getPeriodKey(now.getTime(), interval);
+                    const pastSummaries = summaries.filter(s => s.periodKey < currentKey && s.recordsCount > 0);
+                    
+                    if (pastSummaries.length > 0) {
+                        const targetKeys = pastSummaries.map(s => s.periodKey);
+                        const result = await runArchivingProcedure(interval, targetKeys);
+                        if (result.success && result.backupsCreated > 0) {
+                            setBackupMessage({
+                                type: 'success',
+                                text: `[Backup Otomatis] Berhasil mencadangkan secara otomatis ${result.backupsCreated} periode masa lampau (${result.archivedRecordsCount} data berpindah ke arsip).`
+                            });
+                            await loadBackupData(interval);
+                        }
+                    }
+                } catch (err) {
+                    console.error("Auto-backup failed:", err);
+                }
+            }
+        };
+        checkAutoBackup();
+    }, [mainTab, settings.autoBackupEnabled]);
+
+    const handleRunManualArchive = async (periodKey: string) => {
+        if (!showConfirm) return;
+        showConfirm(
+            '📂 Cadangkan & Kosongkan Data',
+            `Apakah Anda yakin ingin mencadangkan seluruh data periode "${periodKey}" ke tabel arsip, dan mengosongkan tabel aktif periode tersebut? Tindakan ini akan membuat database aktif menjadi ringan dan responsif kembali.`,
+            async () => {
+                setLoadingBackups(true);
+                setBackupMessage(null);
+                try {
+                    const result = await runArchivingProcedure(settings.autoBackupInterval || 'monthly', [periodKey]);
+                    if (result.success) {
+                        setBackupMessage({
+                            type: 'success',
+                            text: `Berhasil mencadangkan ${result.backupsCreated} arsip dan mengosongkan ${result.archivedRecordsCount} data dari database aktif periode ${periodKey}!`
+                        });
+                        await loadBackupData(settings.autoBackupInterval || 'monthly');
+                    }
+                } catch (err: any) {
+                    setBackupMessage({
+                        type: 'error',
+                        text: 'Gagal melakukan pengarsipan: ' + (err.message || String(err))
+                    });
+                } finally {
+                    setLoadingBackups(false);
+                }
+            }
+        );
+    };
+
+    const handleRestoreBackup = async (backup: BackupItem) => {
+        if (!showConfirm) return;
+        showConfirm(
+            '🔄 Pulihkan Data dari Cadangan',
+            `Apakah Anda yakin ingin mengimpor/memulihkan seluruh data dari arsip periode "${backup.key}" kembali ke database aktif? Ini tidak akan menimpa data baru, melingkupi dan melengkapi database sehingga semua perangkat ajar dapat tampil kembali tanpa crash.`,
+            async () => {
+                setLoadingBackups(true);
+                setBackupMessage(null);
+                try {
+                    const result = await restoreBackup(backup.dataJson);
+                    if (result.success) {
+                        setBackupMessage({
+                            type: 'success',
+                            text: `Berhasil memulihkan ${result.restoredCount} perangkat ajar ke database aktif!`
+                        });
+                        await loadBackupData(settings.autoBackupInterval || 'monthly');
+                        if (onSave) onSave();
+                    }
+                } catch (err: any) {
+                    setBackupMessage({
+                        type: 'error',
+                        text: 'Gagal memulihkan cadangan: ' + (err.message || String(err))
+                    });
+                } finally {
+                    setLoadingBackups(false);
+                }
+            }
+        );
+    };
+
+    const handleDownloadBackupJson = (backup: BackupItem) => {
+        try {
+            const blob = new Blob([backup.dataJson], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `backup_${backup.type}_${backup.key}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (err: any) {
+            alert('Gagal mengunduh file JSON: ' + err.message);
+        }
+    };
+
+    const handleDeleteBackup = async (backupId: string, periodKey: string) => {
+        if (!showConfirm) return;
+        showConfirm(
+            '❌ Hapus Arsip Cadangan Permanen',
+            `Apakah Anda yakin ingin menghapus arsip cadangan periode "${periodKey}" secara PERMANEN dari Firestore? Tindakan ini tidak dapat diurungkan dan data pada arsip ini akan hilang jika belum diunduh.`,
+            async () => {
+                setLoadingBackups(true);
+                setBackupMessage(null);
+                try {
+                    const result = await deleteBackup(backupId);
+                    if (result.success) {
+                        setBackupMessage({
+                            type: 'success',
+                            text: `Arsip cadangan periode ${periodKey} berhasil dihapus permanen.`
+                        });
+                        await loadBackupData(settings.autoBackupInterval || 'monthly');
+                    }
+                } catch (err: any) {
+                    setBackupMessage({
+                        type: 'error',
+                        text: 'Gagal menghapus arsip: ' + (err.message || String(err))
+                    });
+                } finally {
+                    setLoadingBackups(false);
+                }
+            }
+        );
+    };
 
     const handleSave = async () => {
         setSaving(true);
@@ -978,6 +1150,235 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     </>
                                 )}
                             </button>
+                        </div>
+                    </div>
+
+                    {/* SECTION: Backup Otomatis & Pembersihan Berkala */}
+                    <div className="border-t border-slate-200 pt-6 mt-6 space-y-6">
+                        <div className="flex items-center gap-2">
+                            <div className="w-1.5 h-6 bg-teal-500 rounded"></div>
+                            <h3 className="text-lg font-bold text-slate-800">Sistem Backup Otomatis & Pengarsipan Berkala</h3>
+                        </div>
+
+                        {backupMessage && (
+                            <div className={`p-4 rounded-xl flex items-center justify-between ${backupMessage.type === 'success' ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' : 'bg-red-50 border border-red-200 text-red-800'}`}>
+                                <span className="font-medium text-sm">{backupMessage.text}</span>
+                                <button onClick={() => setBackupMessage(null)} className="text-xs font-bold underline">Tutup</button>
+                            </div>
+                        )}
+
+                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4">
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                <div>
+                                    <h4 className="font-bold text-slate-800 text-sm">Status Backup Otomatis & Pengosongan Berkala</h4>
+                                    <p className="text-xs text-slate-500 leading-relaxed mt-0.5">
+                                        Ketika diaktifkan, data masa lampau (sebelum hari/bulan ini) akan otomatis dibackup ke Firestore arsip dan dikosongkan dari tabel aktif agar database selalu ringan.
+                                    </p>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    {/* On/Off Toggle */}
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={!!settings.autoBackupEnabled}
+                                            onChange={(e) => setSettings({ ...settings, autoBackupEnabled: e.target.checked })}
+                                            className="sr-only peer"
+                                        />
+                                        <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-600"></div>
+                                        <span className="ml-2 text-sm font-semibold text-slate-700">
+                                            {settings.autoBackupEnabled ? 'Aktif (On)' : 'Nonaktif (Off)'}
+                                        </span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-slate-200 pt-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-700 mb-1.5">Kelompokkan Cadangan Tiap:</label>
+                                    <select
+                                        value={settings.autoBackupInterval || 'monthly'}
+                                        onChange={(e) => {
+                                            const val = e.target.value as 'daily' | 'monthly';
+                                            setSettings({ ...settings, autoBackupInterval: val });
+                                        }}
+                                        className="w-full text-sm border border-slate-300 rounded-lg p-2 focus:ring-teal-500 focus:border-teal-500 bg-white font-medium"
+                                    >
+                                        <option value="monthly">📅 Bulanan (Sangat Direkomendasikan)</option>
+                                        <option value="daily">📆 Harian</option>
+                                    </select>
+                                </div>
+                                <div className="flex items-end">
+                                    <p className="text-xs text-slate-500 leading-relaxed italic">
+                                        *Simpan perubahan pengaturan dengan menekan tombol <strong>Simpan Semua Pengaturan</strong> di bagian bawah halaman.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* SUBSECTION: Database Aktif Berdasarkan Rentang Waktu */}
+                        <div className="space-y-3">
+                            <div>
+                                <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                                    <span>📊 Distribusi Data Database Aktif</span>
+                                    {loadingBackups && <span className="text-xs font-normal text-slate-400 animate-pulse">(Memuat...)</span>}
+                                </h4>
+                                <p className="text-xs text-slate-500">
+                                    Berikut adalah rekap data aktif yang saat ini membebani database utama Anda. Anda bisa mencadangkan & mengosongkannya secara manual per rentang waktu.
+                                </p>
+                            </div>
+
+                            <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
+                                {archivablePeriods.length === 0 ? (
+                                    <div className="p-6 text-center text-slate-400 text-sm">
+                                        Tidak ada data yang terdeteksi di database aktif.
+                                    </div>
+                                ) : (
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left text-xs border-collapse">
+                                            <thead>
+                                                <tr className="bg-slate-50 text-slate-600 border-b border-slate-200 font-bold">
+                                                    <th className="p-3">Periode Waktu</th>
+                                                    <th className="p-3">Jumlah Record Aktif</th>
+                                                    <th className="p-3">Rincian Koleksi</th>
+                                                    <th className="p-3 text-right">Tindakan Mandiri</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100">
+                                                {archivablePeriods.map((item) => {
+                                                    const now = new Date();
+                                                    const currentKey = getPeriodKey(now.getTime(), settings.autoBackupInterval || 'monthly');
+                                                    const isCurrentPeriod = item.periodKey === currentKey;
+                                                    
+                                                    return (
+                                                        <tr key={item.periodKey} className="hover:bg-slate-50/50">
+                                                            <td className="p-3 font-semibold text-slate-700 flex items-center gap-1.5">
+                                                                {isCurrentPeriod ? (
+                                                                    <>
+                                                                        <span>{item.periodKey}</span>
+                                                                        <span className="px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded text-[10px] font-bold">Periode Aktif</span>
+                                                                    </>
+                                                                ) : (
+                                                                    <span>{item.periodKey}</span>
+                                                                )}
+                                                            </td>
+                                                            <td className="p-3 font-bold text-slate-800">{item.recordsCount} data</td>
+                                                            <td className="p-3 text-slate-500 font-medium">
+                                                                {Object.entries(item.collectionBreakdown)
+                                                                    .map(([col, count]) => `${col.toUpperCase()}: ${count}`)
+                                                                    .join(', ')}
+                                                            </td>
+                                                            <td className="p-3 text-right">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleRunManualArchive(item.periodKey)}
+                                                                    className="px-3 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-700 font-semibold rounded-lg text-xs transition border border-teal-200"
+                                                                >
+                                                                    Backup & Kosongkan
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* SUBSECTION: Tabel Koleksi Arsip Cadangan */}
+                        <div className="space-y-3 pt-2">
+                            <div>
+                                <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                                    <span>📦 Galeri Koleksi Arsip Cadangan (Firestore)</span>
+                                </h4>
+                                <p className="text-xs text-slate-500">
+                                    Semua data yang telah dibackup dan diarsipkan. Anda dapat memulihkannya kapan saja tanpa duplikasi atau kres data.
+                                </p>
+                            </div>
+
+                            <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
+                                {backups.length === 0 ? (
+                                    <div className="p-8 text-center text-slate-400 text-sm space-y-1">
+                                        <p className="font-semibold">Belum ada arsip cadangan yang disimpan.</p>
+                                        <p className="text-xs text-slate-400">Gunakan tombol "Backup & Kosongkan" di atas untuk membuat arsip pertama.</p>
+                                    </div>
+                                ) : (
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left text-xs border-collapse">
+                                            <thead>
+                                                <tr className="bg-slate-50 text-slate-600 border-b border-slate-200 font-bold">
+                                                    <th className="p-3">Nama Arsip</th>
+                                                    <th className="p-3">Jumlah Data</th>
+                                                    <th className="p-3">Waktu Pengarsipan</th>
+                                                    <th className="p-3">Tipe Pemicu</th>
+                                                    <th className="p-3 text-right">Aksi</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100">
+                                                {backups.map((backup) => (
+                                                    <tr key={backup.id} className="hover:bg-slate-50/50">
+                                                        <td className="p-3 font-semibold text-slate-700">
+                                                            Arsip {backup.type === 'daily' ? 'Harian' : 'Bulanan'} - {backup.key}
+                                                        </td>
+                                                        <td className="p-3 font-bold text-slate-800">{backup.recordsCount} data</td>
+                                                        <td className="p-3 text-slate-500">
+                                                            {new Date(backup.backupAt).toLocaleString('id-ID', {
+                                                                day: '2-digit',
+                                                                month: '2-digit',
+                                                                year: 'numeric',
+                                                                hour: '2-digit',
+                                                                minute: '2-digit'
+                                                            })} WIB
+                                                        </td>
+                                                        <td className="p-3">
+                                                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${backup.status === 'auto' ? 'bg-indigo-100 text-indigo-800' : 'bg-slate-100 text-slate-800'}`}>
+                                                                {backup.status === 'auto' ? 'OTOMATIS' : 'MANUAL'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="p-3 text-right space-x-1.5 whitespace-nowrap">
+                                                            {/* Import (Restore) Button */}
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleRestoreBackup(backup)}
+                                                                className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold rounded-md text-[11px] transition border border-emerald-200 inline-flex items-center gap-1"
+                                                                title="Impor arsip ini kembali ke database aktif"
+                                                            >
+                                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                                                </svg>
+                                                                <span>Import</span>
+                                                            </button>
+
+                                                            {/* Download JSON Button */}
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleDownloadBackupJson(backup)}
+                                                                className="px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold rounded-md text-[11px] transition border border-slate-200 inline-flex items-center gap-1"
+                                                                title="Unduh data arsip ini sebagai file JSON lokal"
+                                                            >
+                                                                <DownloadIcon className="w-3.5 h-3.5" />
+                                                                <span>Unduh</span>
+                                                            </button>
+
+                                                            {/* Delete Button */}
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleDeleteBackup(backup.id || '', backup.key)}
+                                                                className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold rounded-md text-[11px] transition border border-rose-200 inline-flex items-center gap-1"
+                                                                title="Hapus arsip ini secara permanen"
+                                                            >
+                                                                <TrashIcon className="w-3.5 h-3.5" />
+                                                                <span>Hapus</span>
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>

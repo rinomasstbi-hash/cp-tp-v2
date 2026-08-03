@@ -1070,6 +1070,18 @@ export const deletePROSEMsByTPId = async (tpId: string): Promise<{ success: bool
 };
 
 
+export interface BackupItem {
+  id?: string;
+  type: 'daily' | 'monthly';
+  key: string;
+  backupAt: number;
+  status: 'auto' | 'manual';
+  dataJson: string;
+  recordsCount: number;
+  partIndex?: number;
+  partsCount?: number;
+}
+
 export interface AdminSettings {
   geminiApiKey: string;
   apiKeys?: ApiKeyItem[];
@@ -1086,6 +1098,8 @@ export interface AdminSettings {
   weekLabelsGenap78?: Record<string, Record<string, string>>;
   weekLabelsGanjil9?: Record<string, Record<string, string>>;
   weekLabelsGenap9?: Record<string, Record<string, string>>;
+  autoBackupEnabled?: boolean;
+  autoBackupInterval?: 'daily' | 'monthly';
 }
 
 export const defaultAdminSettings: AdminSettings = {
@@ -1095,6 +1109,8 @@ export const defaultAdminSettings: AdminSettings = {
   nipKepalaMadrasah: '197001012000031001',
   mataPelajaran: MATA_PELAJARAN,
   namaAplikasi: APP_TITLE,
+  autoBackupEnabled: false,
+  autoBackupInterval: 'monthly',
 };
 
 export const getAdminSettings = async (): Promise<AdminSettings | null> => {
@@ -1344,5 +1360,308 @@ export const clearAllDatabase = async (): Promise<{ success: boolean; deletedCou
     } catch (e) {}
 
     return { success: true, deletedCounts };
+};
+
+// --- BACKUP & PERIODIC ARCHIVING FUNCTIONS ---
+
+export interface PeriodSummary {
+  periodKey: string;
+  recordsCount: number;
+  collectionBreakdown: Record<string, number>;
+}
+
+export const getPeriodKey = (timestamp: number, interval: 'daily' | 'monthly'): string => {
+    const d = new Date(timestamp);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    if (interval === 'daily') {
+        const dd = String(d.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+    }
+    return `${yyyy}-${mm}`;
+};
+
+export const getBackups = async (): Promise<BackupItem[]> => {
+    try {
+        const snap = await getDocs(collection(db, 'backups'));
+        const partsMap: Record<string, { 
+            type: 'daily' | 'monthly';
+            key: string;
+            backupAt: number;
+            status: 'auto' | 'manual';
+            parts: Record<number, { dataJson: string; recordsCount: number }>;
+            ids: string[];
+        }> = {};
+
+        snap.forEach(d => {
+            const data = d.data();
+            const type = data.type || 'monthly';
+            const key = data.key || '';
+            const compositeKey = `${type}_${key}`;
+            const partIndex = typeof data.partIndex === 'number' ? data.partIndex : 0;
+            const backupAt = data.backupAt || Date.now();
+            const status = data.status || 'manual';
+
+            if (!partsMap[compositeKey]) {
+                partsMap[compositeKey] = {
+                    type,
+                    key,
+                    backupAt,
+                    status,
+                    parts: {},
+                    ids: []
+                };
+            }
+            
+            if (backupAt > partsMap[compositeKey].backupAt) {
+                partsMap[compositeKey].backupAt = backupAt;
+                partsMap[compositeKey].status = status;
+            }
+
+            partsMap[compositeKey].parts[partIndex] = {
+                dataJson: data.dataJson || '[]',
+                recordsCount: data.recordsCount || 0
+            };
+            partsMap[compositeKey].ids.push(d.id);
+        });
+
+        const list: BackupItem[] = [];
+        for (const [compositeKey, item] of Object.entries(partsMap)) {
+            const sortedPartIndices = Object.keys(item.parts)
+                .map(Number)
+                .sort((a, b) => a - b);
+            
+            let combinedRecords: any[] = [];
+            let totalCount = 0;
+            
+            for (const idx of sortedPartIndices) {
+                try {
+                    const parsed = JSON.parse(item.parts[idx].dataJson);
+                    if (Array.isArray(parsed)) {
+                        combinedRecords = combinedRecords.concat(parsed);
+                    }
+                } catch (e) {
+                    console.error(`Error parsing chunk ${idx} for ${compositeKey}:`, e);
+                }
+                totalCount += item.parts[idx].recordsCount;
+            }
+
+            list.push({
+                id: item.ids.join(','),
+                type: item.type,
+                key: item.key,
+                backupAt: item.backupAt,
+                status: item.status,
+                dataJson: JSON.stringify(combinedRecords),
+                recordsCount: totalCount
+            });
+        }
+
+        return list.sort((a, b) => b.backupAt - a.backupAt);
+    } catch (error) {
+        console.warn("Error fetching backups:", error);
+        return [];
+    }
+};
+
+export const deleteBackup = async (id: string): Promise<{ success: boolean }> => {
+    try {
+        const ids = id.split(',');
+        for (const singleId of ids) {
+            if (singleId.trim()) {
+                await deleteDoc(doc(db, 'backups', singleId.trim()));
+            }
+        }
+        return { success: true };
+    } catch (error) {
+        handleFirestoreError(error, OperationType.DELETE, `backups/${id}`);
+        throw error;
+    }
+};
+
+export const restoreBackup = async (backupJson: string): Promise<{ success: boolean; restoredCount: number }> => {
+    try {
+        const records = JSON.parse(backupJson);
+        if (!Array.isArray(records)) {
+            throw new Error("Format backup tidak valid.");
+        }
+        
+        let restoredCount = 0;
+        for (const record of records) {
+            const { collectionName, payload } = record;
+            if (!collectionName || !payload || !payload.id) continue;
+            
+            // Clean up undefined fields
+            const cleanPayload = removeUndefinedFields(payload);
+            
+            // Write to Firestore
+            await setDoc(doc(db, collectionName, payload.id), cleanPayload);
+            restoredCount++;
+        }
+        
+        return { success: true, restoredCount };
+    } catch (error) {
+        console.error("Error restoring backup:", error);
+        throw error;
+    }
+};
+
+export const runArchivingProcedure = async (
+    interval: 'daily' | 'monthly',
+    targetKeys?: string[]
+): Promise<{ success: boolean; backupsCreated: number; archivedRecordsCount: number }> => {
+    try {
+        const collectionsToArchive = ['tps', 'atps', 'protas', 'kktps', 'prosems', 'rpms'];
+        const allFetchedRecords: { collectionName: string; payload: any; periodKey: string; createdAt: number }[] = [];
+        
+        // 1. Calculate the start of the current period to protect active work from auto archiving
+        const now = new Date();
+        let currentPeriodStartTimestamp = 0;
+        if (interval === 'daily') {
+            const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            currentPeriodStartTimestamp = todayStart.getTime();
+        } else {
+            const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+            currentPeriodStartTimestamp = monthStart.getTime();
+        }
+        
+        // 2. Fetch all active records
+        for (const colName of collectionsToArchive) {
+            const snap = await getDocs(collection(db, colName));
+            snap.forEach(d => {
+                const data = d.data();
+                const createdAt = dateToNumber(data.createdAt || data.updatedAt || Date.now());
+                const periodKey = getPeriodKey(createdAt, interval);
+                
+                allFetchedRecords.push({
+                    collectionName: colName,
+                    payload: { ...data, id: d.id },
+                    periodKey,
+                    createdAt
+                });
+            });
+        }
+        
+        // 3. Filter records that belong to past periods (older than currentPeriodStartTimestamp) OR match targetKeys
+        const archivableRecords = allFetchedRecords.filter(rec => {
+            if (targetKeys) {
+                return targetKeys.includes(rec.periodKey);
+            } else {
+                return rec.createdAt < currentPeriodStartTimestamp;
+            }
+        });
+        
+        if (archivableRecords.length === 0) {
+            return { success: true, backupsCreated: 0, archivedRecordsCount: 0 };
+        }
+        
+        // 4. Group by periodKey
+        const groups: Record<string, typeof archivableRecords> = {};
+        for (const rec of archivableRecords) {
+            if (!groups[rec.periodKey]) {
+                groups[rec.periodKey] = [];
+            }
+            groups[rec.periodKey].push(rec);
+        }
+        
+        let backupsCreated = 0;
+        let totalDeletedCount = 0;
+        
+        // 5. For each group, split into chunks, create backup documents, and clear original records
+        for (const [periodKey, groupRecords] of Object.entries(groups)) {
+            const chunks: (typeof groupRecords)[] = [];
+            let currentChunk: typeof groupRecords = [];
+            let currentChunkLength = 2; // Approximate starting size for "[]"
+
+            for (const rec of groupRecords) {
+                const recStr = JSON.stringify(rec);
+                // Cap each chunk's JSON length around 500,000 characters to stay safely below the 1MB (1,048,576 bytes) Firestore limit
+                if (currentChunk.length > 0 && currentChunkLength + recStr.length + 1 > 500000) {
+                    chunks.push(currentChunk);
+                    currentChunk = [];
+                    currentChunkLength = 2;
+                }
+                currentChunk.push(rec);
+                currentChunkLength += recStr.length + 1; // +1 for comma
+            }
+            if (currentChunk.length > 0) {
+                chunks.push(currentChunk);
+            }
+
+            for (let partIndex = 0; partIndex < chunks.length; partIndex++) {
+                const chunkRecords = chunks[partIndex];
+                const docId = `backup_${interval}_${periodKey}_part_${partIndex}`;
+                const backupRef = doc(db, 'backups', docId);
+                
+                const backupPayload: BackupItem = {
+                    type: interval,
+                    key: periodKey,
+                    partIndex,
+                    partsCount: chunks.length,
+                    backupAt: Date.now(),
+                    status: targetKeys ? 'manual' : 'auto',
+                    dataJson: JSON.stringify(chunkRecords),
+                    recordsCount: chunkRecords.length
+                };
+                
+                await setDoc(backupRef, backupPayload);
+                backupsCreated++;
+            }
+            
+            // Clear original documents in Firestore
+            for (const rec of groupRecords) {
+                try {
+                    await deleteDoc(doc(db, rec.collectionName, rec.payload.id));
+                    totalDeletedCount++;
+                } catch (delErr) {
+                    console.warn(`Gagal menghapus dokumen ${rec.collectionName}/${rec.payload.id}:`, delErr);
+                }
+            }
+        }
+        
+        return {
+            success: true,
+            backupsCreated,
+            archivedRecordsCount: totalDeletedCount
+        };
+    } catch (error) {
+        console.error("Error running archiving procedure:", error);
+        throw error;
+    }
+};
+
+export const getArchivablePeriods = async (interval: 'daily' | 'monthly'): Promise<PeriodSummary[]> => {
+    try {
+        const collectionsToArchive = ['tps', 'atps', 'protas', 'kktps', 'prosems', 'rpms'];
+        const periodMap: Record<string, { count: number; breakdown: Record<string, number> }> = {};
+        
+        for (const colName of collectionsToArchive) {
+            const snap = await getDocs(collection(db, colName));
+            snap.forEach(d => {
+                const data = d.data();
+                const createdAt = dateToNumber(data.createdAt || data.updatedAt || Date.now());
+                const periodKey = getPeriodKey(createdAt, interval);
+                
+                if (!periodMap[periodKey]) {
+                    periodMap[periodKey] = { count: 0, breakdown: {} };
+                }
+                
+                periodMap[periodKey].count++;
+                if (!periodMap[periodKey].breakdown[colName]) {
+                    periodMap[periodKey].breakdown[colName] = 0;
+                }
+                periodMap[periodKey].breakdown[colName]++;
+            });
+        }
+        
+        return Object.entries(periodMap).map(([periodKey, val]) => ({
+            periodKey,
+            recordsCount: val.count,
+            collectionBreakdown: val.breakdown
+        })).sort((a, b) => b.periodKey.localeCompare(a.periodKey));
+    } catch (error) {
+        console.warn("Error getting archivable periods:", error);
+        return [];
+    }
 };
 
