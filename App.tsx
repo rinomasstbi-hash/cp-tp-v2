@@ -491,7 +491,7 @@ const App: React.FC = () => {
     if (!err) return 'Terjadi kesalahan tidak terduga';
     const raw = typeof err === 'string' ? err : (err.message || String(err));
     if (raw.includes('Quota limit exceeded') || raw.includes('resource-exhausted') || raw.includes('quota') || raw.includes('429')) {
-      return 'Mohon maaf Bapak/Ibu Guru, batas kuota harian cloud telah tercapai. Aplikasi otomatis beralih ke Mode Penyimpanan Lokal agar pekerjaan Anda tetap aman dan dapat dicetak/dieksport.';
+      return 'Kuota Pembuatan perangkat bersama hari ini telah terpakai, harap kembali lagi esok hari.';
     }
     if (raw.startsWith('{') && raw.endsWith('}')) {
       try {

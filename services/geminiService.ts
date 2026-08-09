@@ -38,7 +38,7 @@ const handleGeminiError = (e: any, context: string) => {
         errorMsg = 'Server AI Google saat ini sedang sibuk (high demand). Silakan coba lagi beberapa saat.';
     } else if (errorMsg.includes('429') || errorMsg.includes('Quota exceeded') || errorMsg.includes('quota') || errorMsg.includes('Limit Tercapai')) {
         notifyQuotaExceeded('ai');
-        errorMsg = 'Batas kuota harian API Key AI telah tercapai. Aplikasi berpindah ke Mode Baca (Read-Only). Anda dapat meninjau dan mencetak dokumen yang sudah ada.';
+        errorMsg = 'Kuota Pembuatan perangkat bersama hari ini telah terpakai, harap kembali lagi esok hari.';
     } else if (errorMsg.includes('403') || errorMsg.includes('API_KEY_INVALID') || errorMsg.includes('PERMISSION_DENIED')) {
         errorMsg = 'API Key Anda tidak valid atau telah diblokir. Harap periksa kembali konfigurasi API Key Anda.';
     }
@@ -78,7 +78,8 @@ const runWithAutoRotatedApiKey = async <T>(
         if (pk.status !== 'Aktif' && pk.lastUsed && (now - pk.lastUsed) >= MS_PER_DAY) {
             console.log(`[Auto-Reactivation] API Key (${pk.id}) telah melewati masa tunggu 24 jam. Mengembalikan status ke Aktif.`);
             poolNeedsUpdate = true;
-            return { ...pk, status: 'Aktif' as const, errorMessage: undefined };
+            const { errorMessage, ...rest } = pk;
+            return { ...rest, status: 'Aktif' as const };
         }
         return pk;
     });

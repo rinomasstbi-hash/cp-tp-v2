@@ -189,9 +189,30 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({
             try {
                 const data = await getAdminSettings();
                 if (data) {
+                    let apiKeysList = data.apiKeys || [];
+                    const MS_PER_DAY = 24 * 60 * 60 * 1000;
+                    const now = Date.now();
+                    let needsSave = false;
+
+                    const updatedKeys = apiKeysList.map(pk => {
+                        if (pk.status !== 'Aktif' && pk.lastUsed && (now - pk.lastUsed) >= MS_PER_DAY) {
+                            needsSave = true;
+                            const { errorMessage, ...rest } = pk;
+                            return { ...rest, status: 'Aktif' as const };
+                        }
+                        return pk;
+                    });
+
+                    if (needsSave) {
+                        console.log("[Auto-Reset Settings Page] Reactivating expired API keys automatically.");
+                        await saveAdminSettings({ ...data, apiKeys: updatedKeys });
+                        apiKeysList = updatedKeys;
+                    }
+
                     setSettings(prev => ({ 
                         ...prev, 
                         ...data,
+                        apiKeys: apiKeysList,
                         weeksGanjil78: sanitizeWeeks(data.weeksGanjil78, DEFAULT_GANJIL_78),
                         weeksGenap78: sanitizeWeeks(data.weeksGenap78, DEFAULT_GENAP_78),
                         weeksGanjil9: sanitizeWeeks(data.weeksGanjil9, DEFAULT_GANJIL_9),
@@ -201,9 +222,7 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({
                         weekLabelsGanjil9: sanitizeLabels(data.weekLabelsGanjil9),
                         weekLabelsGenap9: sanitizeLabels(data.weekLabelsGenap9),
                     }));
-                    if (Array.isArray(data.apiKeys)) {
-                        setApiKeys(data.apiKeys);
-                    }
+                    setApiKeys(apiKeysList);
                 }
             } catch (error) {
                 console.error("Gagal memuat pengaturan:", error);
@@ -430,7 +449,11 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({
     const handleToggleApiKeyStatus = (id: string, newStatus: 'Aktif' | 'Limit Tercapai' | 'Error') => {
         const updated = apiKeys.map(k => {
             if (k.id === id) {
-                return { ...k, status: newStatus, errorMessage: newStatus === 'Aktif' ? undefined : k.errorMessage };
+                if (newStatus === 'Aktif') {
+                    const { errorMessage, ...rest } = k;
+                    return { ...rest, status: newStatus };
+                }
+                return { ...k, status: newStatus };
             }
             return k;
         });

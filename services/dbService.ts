@@ -1119,6 +1119,32 @@ export const getAdminSettings = async (): Promise<AdminSettings | null> => {
     const snap = await getDoc(docRef);
     if (snap.exists()) {
       const data = snap.data() as AdminSettings;
+      
+      // Auto-reactivate keys that have been in 'Error' or 'Limit' for > 24 hours
+      let apiKeysList = data.apiKeys || [];
+      const MS_PER_DAY = 24 * 60 * 60 * 1000;
+      const now = Date.now();
+      let needsSave = false;
+
+      const updatedKeys = apiKeysList.map(pk => {
+        if (pk.status !== 'Aktif' && pk.lastUsed && (now - pk.lastUsed) >= MS_PER_DAY) {
+          needsSave = true;
+          const { errorMessage, ...rest } = pk;
+          return { ...rest, status: 'Aktif' as const };
+        }
+        return pk;
+      });
+
+      if (needsSave) {
+        console.log("[dbService] Auto-reactivating expired API keys on getAdminSettings");
+        try {
+          await setDoc(docRef, { apiKeys: updatedKeys }, { merge: true });
+        } catch (e) {
+          console.error("Gagal melakukan auto-reactivation API key di getAdminSettings", e);
+        }
+        data.apiKeys = updatedKeys;
+      }
+
       const merged: AdminSettings = {
         ...defaultAdminSettings,
         ...data,
