@@ -69,6 +69,30 @@ const runWithAutoRotatedApiKey = async <T>(
         console.error("Gagal memuat pengaturan API dari Firestore", e);
     }
 
+    // Pre-processing: Auto-reactivate keys that have been in 'Error' or 'Limit' for > 24 hours
+    const MS_PER_DAY = 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    let poolNeedsUpdate = false;
+    
+    const processedPoolKeys = poolKeys.map(pk => {
+        if (pk.status !== 'Aktif' && pk.lastUsed && (now - pk.lastUsed) >= MS_PER_DAY) {
+            console.log(`[Auto-Reactivation] API Key (${pk.id}) telah melewati masa tunggu 24 jam. Mengembalikan status ke Aktif.`);
+            poolNeedsUpdate = true;
+            return { ...pk, status: 'Aktif' as const, errorMessage: undefined };
+        }
+        return pk;
+    });
+
+    if (poolNeedsUpdate) {
+        try {
+            const docRef = doc(db, 'settings', 'admin');
+            await setDoc(docRef, { apiKeys: processedPoolKeys }, { merge: true });
+            poolKeys = processedPoolKeys;
+        } catch (e) {
+            console.error("Gagal melakukan auto-reactivation API key", e);
+        }
+    }
+
     const candidates: KeyAttemptInfo[] = [];
 
     // Prioritaskan API Key aktif dari pool

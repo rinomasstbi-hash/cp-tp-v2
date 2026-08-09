@@ -898,15 +898,15 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({
                     <div className="border-b pb-4">
                         <h2 className="text-xl font-bold text-slate-800">Konfigurasi & Pool Gemini API</h2>
                         <p className="text-sm text-slate-500 mt-1">
-                            Atur API Key utama dan ketersediaan API Key cadangan. Sistem akan memutar penggunaan key secara otomatis jika salah satu key cadangan mendeteksi batas limit harian tercapai.
+                            Atur API Key utama dan ketersediaan API Key cadangan. Sistem akan memutar penggunaan key secara otomatis jika salah satu key cadangan mendeteksi batas limit harian tercapai. <strong>Key yang Limit/Error akan otomatis diaktifkan kembali setelah 24 jam.</strong>
                         </p>
                     </div>
 
                     <div className="bg-blue-50 border border-blue-200 text-blue-800 rounded-lg p-4 text-sm flex gap-3">
                         <span className="text-lg">⚙️</span>
                         <div>
-                            <strong className="block mb-0.5">Sistem Rotasi API Key Otomatis Aktif</strong>
-                            Saat proses men-generate modul ajar atau perangkat ajar, apabila API Key yang sedang digunakan menyentuh batas limit harian (<code className="bg-blue-100 px-1 rounded text-xs font-mono">Quota Exceeded / 429</code>), sistem akan otomatis memperbarui statusnya menjadi <span className="font-semibold text-amber-700">"Limit Tercapai"</span> di database dan memindahkan pemrosesan ke API Key cadangan berikutnya yang berstatus <span className="font-semibold text-green-700">"Aktif"</span> secara real-time tanpa mengganggu kenyamanan pengguna.
+                            <strong className="block mb-0.5">Sistem Rotasi & Reaktivasi API Key Otomatis Aktif</strong>
+                            Saat proses men-generate modul ajar atau perangkat ajar, apabila API Key yang sedang digunakan menyentuh batas limit harian (<code className="bg-blue-100 px-1 rounded text-xs font-mono">Quota Exceeded / 429</code>), sistem akan otomatis memperbarui statusnya menjadi <span className="font-semibold text-amber-700">"Limit Tercapai"</span> di database dan memindahkan pemrosesan ke API Key cadangan berikutnya yang berstatus <span className="font-semibold text-green-700">"Aktif"</span> secara real-time. <strong>Setiap key yang Limit/Error akan otomatis di-reset menjadi "Aktif" kembali oleh sistem tepat 24 jam setelah kejadian error terakhir.</strong>
                         </div>
                     </div>
 
@@ -1003,15 +1003,22 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({
                                                         </div>
                                                     </td>
                                                     <td className="p-3">
-                                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
-                                                            k.status === 'Aktif' 
-                                                                ? 'bg-green-100 text-green-800 border-green-200' 
-                                                                : k.status === 'Limit Tercapai'
-                                                                    ? 'bg-amber-100 text-amber-800 border-amber-200'
-                                                                    : 'bg-red-100 text-red-800 border-red-200'
-                                                        }`}>
-                                                            {k.status}
-                                                        </span>
+                                                        <div className="flex flex-col gap-1">
+                                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border w-fit ${
+                                                                k.status === 'Aktif' 
+                                                                    ? 'bg-green-100 text-green-800 border-green-200' 
+                                                                    : k.status === 'Limit Tercapai'
+                                                                        ? 'bg-amber-100 text-amber-800 border-amber-200'
+                                                                        : 'bg-red-100 text-red-800 border-red-200'
+                                                            }`}>
+                                                                {k.status}
+                                                            </span>
+                                                            {k.status !== 'Aktif' && k.lastUsed && (
+                                                                <span className="text-[10px] text-slate-500 font-medium">
+                                                                    Auto-reset: {new Date(k.lastUsed + 24 * 60 * 60 * 1000).toLocaleString('id-ID', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })}
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     </td>
                                                     <td className="p-3 text-xs text-slate-500 font-medium">{formatLastUsed(k.lastUsed)}</td>
                                                     <td className="p-3 text-xs text-slate-500 max-w-xs truncate" title={k.errorMessage || ''}>
